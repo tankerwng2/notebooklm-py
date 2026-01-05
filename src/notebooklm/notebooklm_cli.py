@@ -1020,7 +1020,8 @@ def source_list(ctx, notebook_id):
 @source.command("add")
 @click.argument("content")
 @click.option("-n", "--notebook", "notebook_id", default=None, help="Notebook ID (uses current if not set)")
-@click.option("--type", "source_type", type=click.Choice(["url", "text", "file", "youtube"]), default="url")
+@click.option("--type", "source_type", type=click.Choice(["url", "text", "file", "youtube"]), default=None,
+              help="Source type (auto-detected if not specified)")
 @click.option("--title", help="Title for text sources")
 @click.option("--mime-type", help="MIME type for file sources")
 @click.pass_context
@@ -1028,30 +1029,51 @@ def source_add(ctx, content, notebook_id, source_type, title, mime_type):
     """Add a source to a notebook.
 
     \b
+    Source type is auto-detected:
+      - URLs (http/https) → url or youtube
+      - Existing files → file
+      - Use --type to override
+
+    \b
     Examples:
-      source add https://example.com              # URL
+      source add https://example.com              # URL (auto-detected)
+      source add ./doc.pdf                        # File (auto-detected)
+      source add https://youtube.com/...          # YouTube (auto-detected)
       source add "My content" --type text --title "My Doc"
-      source add ./doc.pdf --type file
-      source add https://youtube.com/... --type youtube
     """
     try:
         nb_id = require_notebook(notebook_id)
         cookies, csrf, session_id = get_client(ctx)
         auth = AuthTokens(cookies=cookies, csrf_token=csrf, session_id=session_id)
 
+        # Auto-detect source type if not specified
+        detected_type = source_type
+        if detected_type is None:
+            if content.startswith(("http://", "https://")):
+                # Check for YouTube URLs
+                if "youtube.com" in content or "youtu.be" in content:
+                    detected_type = "youtube"
+                else:
+                    detected_type = "url"
+            elif Path(content).exists():
+                detected_type = "file"
+            else:
+                # Default to URL for non-existent paths (might be a remote URL without scheme)
+                detected_type = "url"
+
         async def _add():
             async with NotebookLMClient(auth) as client:
                 service = SourceService(client)
-                if source_type == "url":
+                if detected_type == "url":
                     return await service.add_url(nb_id, content)
-                elif source_type == "youtube":
+                elif detected_type == "youtube":
                     return await service.add_url(nb_id, content)
-                elif source_type == "text":
+                elif detected_type == "text":
                     return await service.add_text(nb_id, title or "Untitled", content)
-                elif source_type == "file":
+                elif detected_type == "file":
                     return await service.add_file(nb_id, content, mime_type)
 
-        with console.status(f"Adding {source_type} source..."):
+        with console.status(f"Adding {detected_type} source..."):
             source = run_async(_add())
 
         console.print(f"[green]Added source:[/green] {source.id}")
