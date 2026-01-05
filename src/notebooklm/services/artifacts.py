@@ -176,15 +176,26 @@ class ArtifactService:
         return ArtifactStatus(task_id=artifact_id, status=status)
 
     async def poll_status(self, notebook_id: str, task_id: str) -> ArtifactStatus:
-        """Poll the status of a generation task."""
+        """Poll the status of a generation task.
+
+        Note: The POLL_STUDIO RPC appears broken/outdated, so we use list_artifacts
+        as a fallback to check artifact status.
+        """
         result = await self._client.poll_studio_status(notebook_id, task_id)
 
-        # Handle None result (RPC returned no data)
+        # POLL_STUDIO RPC is broken - use list_artifacts as fallback
         if result is None:
+            artifacts = await self._client.list_artifacts(notebook_id)
+            for art in artifacts:
+                if len(art) > 0 and art[0] == task_id:
+                    # Found artifact - status at position 4 (1=in_progress, 2/3=completed)
+                    status_code = art[4] if len(art) > 4 else 0
+                    status = "in_progress" if status_code == 1 else "completed"
+                    return ArtifactStatus(task_id=task_id, status=status)
+            # Artifact not in list yet - still pending
             return ArtifactStatus(task_id=task_id, status="pending")
 
         # Result format: [task_id, status, url, error, metadata]
-        # Note: Actual format varies by artifact type, this is a generalized parser
         status = result[1] if len(result) > 1 else "unknown"
         url = result[2] if len(result) > 2 else None
         error = result[3] if len(result) > 3 else None
