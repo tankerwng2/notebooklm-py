@@ -1715,7 +1715,9 @@ async def _download_artifacts_generic(
 
     # Get notebook and auth
     nb_id = require_notebook(notebook)
-    cookies, csrf, session_id = get_client(ctx)
+    storage_path = ctx.obj.get("storage_path") if ctx.obj else None
+    cookies = load_auth_from_storage(storage_path)
+    csrf, session_id = await fetch_tokens(cookies)
     auth = AuthTokens(cookies=cookies, csrf_token=csrf, session_id=session_id)
 
     async def _download() -> dict[str, Any]:
