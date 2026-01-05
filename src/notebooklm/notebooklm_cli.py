@@ -1653,6 +1653,355 @@ def download():
     pass
 
 
+async def _download_artifacts_generic(
+    ctx,
+    artifact_type_name: str,
+    artifact_type_id: int,
+    file_extension: str,
+    default_output_dir: str,
+    output_path: str | None,
+    notebook: str | None,
+    latest: bool,
+    earliest: bool,
+    download_all: bool,
+    name: str | None,
+    artifact_id: str | None,
+    json_output: bool,
+    dry_run: bool,
+    force: bool,
+    no_clobber: bool,
+) -> dict:
+    """
+    Generic artifact download implementation.
+
+    Handles all artifact types (audio, video, infographic, slide-deck)
+    with the same logic, only varying by extension and type filters.
+
+    Args:
+        ctx: Click context
+        artifact_type_name: Human-readable type name ("audio", "video", etc.)
+        artifact_type_id: RPC type ID (1=audio, 3=video, 7=infographic, 8=slide-deck)
+        file_extension: File extension (".mp3", ".mp4", ".png", "" for directories)
+        default_output_dir: Default output directory for --all flag
+        output_path: User-specified output path
+        notebook: Notebook ID
+        latest: Download latest artifact
+        earliest: Download earliest artifact
+        download_all: Download all artifacts
+        name: Filter by artifact title
+        artifact_id: Select by exact artifact ID
+        json_output: Output JSON instead of text
+        dry_run: Preview without downloading
+        force: Overwrite existing files/directories
+        no_clobber: Skip if file/directory exists
+
+    Returns:
+        Result dictionary with operation details
+    """
+    from .download_helpers import select_artifact, artifact_title_to_filename
+    from pathlib import Path
+    from typing import Any
+
+    # Validate conflicting flags
+    if force and no_clobber:
+        raise click.UsageError("Cannot specify both --force and --no-clobber")
+    if latest and earliest:
+        raise click.UsageError("Cannot specify both --latest and --earliest")
+    if download_all and artifact_id:
+        raise click.UsageError("Cannot specify both --all and --artifact-id")
+
+    # Is it a directory type (slide-deck)?
+    is_directory_type = file_extension == ""
+
+    # Get notebook and auth
+    nb_id = require_notebook(notebook)
+    cookies, csrf, session_id = get_client(ctx)
+    auth = AuthTokens(cookies=cookies, csrf_token=csrf, session_id=session_id)
+
+    async def _download() -> dict[str, Any]:
+        async with NotebookLMClient(auth) as client:
+            # Fetch artifacts
+            all_artifacts = await client.list_artifacts(nb_id)
+
+            # Filter by type and status=3 (completed)
+            # Artifact structure: [id, title, type, created_at, status, ...]
+            type_artifacts_raw = [
+                a for a in all_artifacts
+                if isinstance(a, list) and len(a) > 4 and a[2] == artifact_type_id and a[4] == 3
+            ]
+
+            if not type_artifacts_raw:
+                return {
+                    "error": f"No completed {artifact_type_name} artifacts found",
+                    "suggestion": f"Generate one with: notebooklm generate {artifact_type_name}"
+                }
+
+            # Convert to dict format
+            type_artifacts = [
+                {
+                    "id": a[0],
+                    "title": a[1],
+                    "created_at": a[3] if len(a) > 3 else 0,
+                }
+                for a in type_artifacts_raw
+            ]
+
+            # Helper for file/dir conflict resolution
+            def _resolve_conflict(path: Path) -> tuple[Path | None, dict | None]:
+                if not path.exists():
+                    return path, None
+
+                if no_clobber:
+                    entity_type = "directory" if is_directory_type else "file"
+                    return None, {
+                        "status": "skipped",
+                        "reason": f"{entity_type} exists",
+                        "path": str(path)
+                    }
+
+                if not force:
+                    # Auto-rename
+                    counter = 2
+                    if is_directory_type:
+                        base_name = path.name
+                        parent = path.parent
+                        while path.exists():
+                            path = parent / f"{base_name} ({counter})"
+                            counter += 1
+                    else:
+                        base_name = path.stem
+                        parent = path.parent
+                        ext = path.suffix
+                        while path.exists():
+                            path = parent / f"{base_name} ({counter}){ext}"
+                            counter += 1
+
+                return path, None
+
+            # Handle --all flag
+            if download_all:
+                output_dir = Path(output_path) if output_path else Path(default_output_dir)
+
+                if dry_run:
+                    return {
+                        "dry_run": True,
+                        "operation": "download_all",
+                        "count": len(type_artifacts),
+                        "output_dir": str(output_dir),
+                        "artifacts": [
+                            {
+                                "id": a["id"],
+                                "title": a["title"],
+                                "filename": artifact_title_to_filename(
+                                    a["title"],
+                                    file_extension if not is_directory_type else "",
+                                    set()
+                                )
+                            }
+                            for a in type_artifacts
+                        ]
+                    }
+
+                output_dir.mkdir(parents=True, exist_ok=True)
+
+                results = []
+                existing_names = set()
+                total = len(type_artifacts)
+
+                for i, artifact in enumerate(type_artifacts, 1):
+                    # Progress indicator
+                    if not json_output:
+                        console.print(f"[dim]Downloading {i}/{total}:[/dim] {artifact['title']}")
+
+                    # Generate safe name
+                    item_name = artifact_title_to_filename(
+                        artifact["title"],
+                        file_extension if not is_directory_type else "",
+                        existing_names
+                    )
+                    existing_names.add(item_name)
+                    item_path = output_dir / item_name
+
+                    # Resolve conflicts
+                    resolved_path, skip_info = _resolve_conflict(item_path)
+                    if skip_info:
+                        results.append({
+                            "id": artifact["id"],
+                            "title": artifact["title"],
+                            "filename": item_name,
+                            **skip_info
+                        })
+                        continue
+
+                    # Update if auto-renamed
+                    item_path = resolved_path
+                    item_name = item_path.name
+
+                    # Download
+                    try:
+                        if is_directory_type:
+                            item_path.mkdir(parents=True, exist_ok=True)
+                            await client.download_slide_deck(nb_id, str(item_path), artifact_id=artifact["id"])
+                        elif artifact_type_name == "audio":
+                            await client.download_audio(nb_id, str(item_path), artifact_id=artifact["id"])
+                        elif artifact_type_name == "video":
+                            await client.download_video(nb_id, str(item_path), artifact_id=artifact["id"])
+                        elif artifact_type_name == "infographic":
+                            await client.download_infographic(nb_id, str(item_path), artifact_id=artifact["id"])
+
+                        results.append({
+                            "id": artifact["id"],
+                            "title": artifact["title"],
+                            "filename": item_name,
+                            "path": str(item_path),
+                            "status": "downloaded"
+                        })
+                    except Exception as e:
+                        results.append({
+                            "id": artifact["id"],
+                            "title": artifact["title"],
+                            "filename": item_name,
+                            "status": "failed",
+                            "error": str(e)
+                        })
+
+                return {
+                    "operation": "download_all",
+                    "output_dir": str(output_dir),
+                    "total": total,
+                    "results": results
+                }
+
+            # Single artifact selection
+            try:
+                selected, reason = select_artifact(
+                    type_artifacts,
+                    latest=latest,
+                    earliest=earliest,
+                    name=name,
+                    artifact_id=artifact_id
+                )
+            except ValueError as e:
+                return {"error": str(e)}
+
+            # Determine output path
+            if not output_path:
+                safe_name = artifact_title_to_filename(
+                    selected["title"],
+                    file_extension if not is_directory_type else "",
+                    set()
+                )
+                final_path = Path.cwd() / safe_name
+            else:
+                final_path = Path(output_path)
+
+            # Dry run
+            if dry_run:
+                return {
+                    "dry_run": True,
+                    "operation": "download_single",
+                    "artifact": {
+                        "id": selected["id"],
+                        "title": selected["title"],
+                        "selection_reason": reason
+                    },
+                    "output_path": str(final_path)
+                }
+
+            # Resolve conflicts
+            resolved_path, skip_error = _resolve_conflict(final_path)
+            if skip_error:
+                entity_type = "Directory" if is_directory_type else "File"
+                return {
+                    "error": f"{entity_type} exists: {final_path}",
+                    "artifact": selected,
+                    "suggestion": "Use --force to overwrite or choose a different path"
+                }
+
+            final_path = resolved_path
+
+            # Download
+            try:
+                if is_directory_type:
+                    final_path.mkdir(parents=True, exist_ok=True)
+                    result_path = await client.download_slide_deck(nb_id, str(final_path), artifact_id=selected["id"])
+                elif artifact_type_name == "audio":
+                    result_path = await client.download_audio(nb_id, str(final_path), artifact_id=selected["id"])
+                elif artifact_type_name == "video":
+                    result_path = await client.download_video(nb_id, str(final_path), artifact_id=selected["id"])
+                elif artifact_type_name == "infographic":
+                    result_path = await client.download_infographic(nb_id, str(final_path), artifact_id=selected["id"])
+
+                return {
+                    "operation": "download_single",
+                    "artifact": {
+                        "id": selected["id"],
+                        "title": selected["title"],
+                        "selection_reason": reason
+                    },
+                    "output_path": result_path or str(final_path),
+                    "status": "downloaded"
+                }
+            except Exception as e:
+                return {
+                    "error": str(e),
+                    "artifact": selected
+                }
+
+    return await _download()
+
+
+def _display_download_result(result: dict, artifact_type: str):
+    """Display download results in user-friendly format."""
+    if "error" in result:
+        console.print(f"[red]Error:[/red] {result['error']}")
+        if "suggestion" in result:
+            console.print(f"[dim]{result['suggestion']}[/dim]")
+        return
+
+    # Dry run
+    if result.get("dry_run"):
+        if result["operation"] == "download_all":
+            console.print(f"[yellow]DRY RUN:[/yellow] Would download {result['count']} {artifact_type} files to: {result['output_dir']}")
+            console.print("\n[bold]Preview:[/bold]")
+            for art in result["artifacts"]:
+                console.print(f"  {art['filename']} <- {art['title']}")
+        else:
+            console.print(f"[yellow]DRY RUN:[/yellow] Would download:")
+            console.print(f"  Artifact: {result['artifact']['title']}")
+            console.print(f"  Reason: {result['artifact']['selection_reason']}")
+            console.print(f"  Output: {result['output_path']}")
+        return
+
+    # Download all results
+    if result.get("operation") == "download_all":
+        downloaded = [r for r in result["results"] if r.get("status") == "downloaded"]
+        skipped = [r for r in result["results"] if r.get("status") == "skipped"]
+        failed = [r for r in result["results"] if r.get("status") == "failed"]
+
+        console.print(f"[bold]Downloaded {len(downloaded)}/{result['total']} {artifact_type} files to:[/bold] {result['output_dir']}")
+
+        if downloaded:
+            console.print("\n[green]Downloaded:[/green]")
+            for r in downloaded:
+                console.print(f"  {r['filename']} <- {r['title']}")
+
+        if skipped:
+            console.print("\n[yellow]Skipped:[/yellow]")
+            for r in skipped:
+                console.print(f"  {r['filename']} ({r.get('reason', 'unknown')})")
+
+        if failed:
+            console.print("\n[red]Failed:[/red]")
+            for r in failed:
+                console.print(f"  {r['filename']}: {r.get('error', 'unknown error')}")
+
+    # Single download
+    else:
+        console.print(f"[green]{artifact_type.capitalize()} saved to:[/green] {result['output_path']}")
+        console.print(f"[dim]Artifact: {result['artifact']['title']} ({result['artifact']['selection_reason']})[/dim]")
+
+
 @download.command("audio")
 @click.argument("output_path", required=False, type=click.Path())
 @click.option("-n", "--notebook", help="Notebook ID (uses current context if not set)")
@@ -1686,289 +2035,35 @@ def download_audio(ctx, output_path, notebook, latest, earliest, download_all, n
       # Preview without downloading
       notebooklm download audio --all --dry-run
     """
-    from .download_helpers import select_artifact, artifact_title_to_filename
-    from pathlib import Path
-    from typing import Any
-
-    # Constants
-    AUDIO_EXTENSION = ".mp3"
-    DEFAULT_OUTPUT_DIR = "./audio"
-
-    # Validate conflict flags
-    if force and no_clobber:
-        console.print("[red]Cannot specify both --force and --no-clobber[/red]")
-        raise SystemExit(1)
-
-    # Validate selection flags
-    if latest and earliest:
-        console.print("[red]Cannot specify both --latest and --earliest[/red]")
-        raise SystemExit(1)
-
-    if download_all and artifact_id:
-        console.print("[red]Cannot specify both --all and --artifact-id[/red]")
-        raise SystemExit(1)
-
-    def _resolve_file_conflict(
-        file_path: Path,
-        force: bool,
-        no_clobber: bool
-    ) -> tuple[Path | None, dict | None]:
-        """
-        Resolve file conflicts for download.
-
-        Returns:
-            tuple: (resolved_path, error_dict)
-            - If file can be used/created: (Path, None)
-            - If should skip (no_clobber): (None, error_dict)
-        """
-        if not file_path.exists():
-            return file_path, None
-
-        if no_clobber:
-            return None, {
-                "status": "skipped",
-                "reason": "file exists",
-                "path": str(file_path)
-            }
-
-        if not force:
-            # Auto-rename with (2), (3), etc.
-            counter = 2
-            base = file_path.stem
-            ext = file_path.suffix
-            parent = file_path.parent
-
-            while file_path.exists():
-                file_path = parent / f"{base} ({counter}){ext}"
-                counter += 1
-
-        return file_path, None
-
     try:
-        nb_id = require_notebook(notebook)
-        cookies, csrf, session_id = get_client(ctx)
-        auth = AuthTokens(cookies=cookies, csrf_token=csrf, session_id=session_id)
+        result = run_async(_download_artifacts_generic(
+            ctx=ctx,
+            artifact_type_name="audio",
+            artifact_type_id=1,
+            file_extension=".mp3",
+            default_output_dir="./audio",
+            output_path=output_path,
+            notebook=notebook,
+            latest=latest,
+            earliest=earliest,
+            download_all=download_all,
+            name=name,
+            artifact_id=artifact_id,
+            json_output=json_output,
+            dry_run=dry_run,
+            force=force,
+            no_clobber=no_clobber
+        ))
 
-        async def _download() -> dict[str, Any]:
-            async with NotebookLMClient(auth) as client:
-                # Get all artifacts and filter for audio
-                all_artifacts = await client.list_artifacts(nb_id)
-
-                # Filter: type=1 (audio), status=3 (completed)
-                audio_artifacts_raw = [
-                    a for a in all_artifacts
-                    if isinstance(a, list) and len(a) > 4 and a[2] == 1 and a[4] == 3
-                ]
-
-                if not audio_artifacts_raw:
-                    return {"error": "No completed audio artifacts found"}
-
-                # Convert to dict format for select_artifact helper
-                audio_artifacts = [
-                    {"id": a[0], "title": a[1], "created_at": a[3] if len(a) > 3 else 0}
-                    for a in audio_artifacts_raw
-                ]
-
-                # Handle --all flag
-                if download_all:
-                    # Default directory for --all
-                    output_dir = Path(output_path) if output_path else Path(DEFAULT_OUTPUT_DIR)
-
-                    if dry_run:
-                        return {
-                            "dry_run": True,
-                            "operation": "download_all",
-                            "count": len(audio_artifacts),
-                            "output_dir": str(output_dir),
-                            "artifacts": [
-                                {
-                                    "id": a["id"],
-                                    "title": a["title"],
-                                    "filename": artifact_title_to_filename(a["title"], AUDIO_EXTENSION, set())
-                                }
-                                for a in audio_artifacts
-                            ]
-                        }
-
-                    # Create output directory
-                    output_dir.mkdir(parents=True, exist_ok=True)
-
-                    results = []
-                    existing_files = set()
-                    total = len(audio_artifacts)
-
-                    for i, artifact in enumerate(audio_artifacts, 1):
-                        # Progress indicator (not in JSON mode)
-                        if not json_output:
-                            console.print(f"[dim]Downloading {i}/{total}:[/dim] {artifact['title']}")
-
-                        # Generate filename
-                        filename = artifact_title_to_filename(
-                            artifact["title"], AUDIO_EXTENSION, existing_files
-                        )
-                        existing_files.add(filename)
-                        file_path = output_dir / filename
-
-                        # Resolve file conflicts
-                        resolved_path, skip_info = _resolve_file_conflict(file_path, force, no_clobber)
-                        if skip_info:
-                            results.append({
-                                "id": artifact["id"],
-                                "title": artifact["title"],
-                                "filename": filename,
-                                **skip_info
-                            })
-                            continue
-
-                        # Update filename if path was auto-renamed
-                        file_path = resolved_path
-                        filename = file_path.name
-
-                        # Download
-                        try:
-                            await client.download_audio(nb_id, str(file_path), artifact_id=artifact["id"])
-                            results.append({
-                                "id": artifact["id"],
-                                "title": artifact["title"],
-                                "filename": filename,
-                                "path": str(file_path),
-                                "status": "downloaded"
-                            })
-                        except Exception as e:
-                            results.append({
-                                "id": artifact["id"],
-                                "title": artifact["title"],
-                                "filename": filename,
-                                "status": "failed",
-                                "error": str(e)
-                            })
-
-                    return {
-                        "operation": "download_all",
-                        "output_dir": str(output_dir),
-                        "total": len(audio_artifacts),
-                        "results": results
-                    }
-
-                # Single artifact selection
-                try:
-                    selected, reason = select_artifact(
-                        audio_artifacts,
-                        latest=latest,
-                        earliest=earliest,
-                        name=name,
-                        artifact_id=artifact_id
-                    )
-                except ValueError as e:
-                    return {"error": str(e)}
-
-                # Determine output path
-                if not output_path:
-                    # Default: ./[artifact-title].mp3
-                    default_filename = artifact_title_to_filename(selected["title"], AUDIO_EXTENSION, set())
-                    final_output_path = Path.cwd() / default_filename
-                else:
-                    final_output_path = Path(output_path)
-
-                if dry_run:
-                    return {
-                        "dry_run": True,
-                        "operation": "download_single",
-                        "artifact": {
-                            "id": selected["id"],
-                            "title": selected["title"],
-                            "selection_reason": reason
-                        },
-                        "output_path": str(final_output_path)
-                    }
-
-                # Resolve file conflicts
-                resolved_path, skip_error = _resolve_file_conflict(final_output_path, force, no_clobber)
-                if skip_error:
-                    return {
-                        "error": f"File exists: {final_output_path}",
-                        "artifact": selected,
-                        "suggestion": "Use --force to overwrite or choose a different path"
-                    }
-
-                final_output_path = resolved_path
-
-                # Download
-                try:
-                    result_path = await client.download_audio(
-                        nb_id, str(final_output_path), artifact_id=selected["id"]
-                    )
-                    return {
-                        "operation": "download_single",
-                        "artifact": {
-                            "id": selected["id"],
-                            "title": selected["title"],
-                            "selection_reason": reason
-                        },
-                        "output_path": result_path,
-                        "status": "downloaded"
-                    }
-                except Exception as e:
-                    return {
-                        "error": str(e),
-                        "artifact": selected
-                    }
-
-        result = run_async(_download())
-
-        # Handle JSON output
         if json_output:
             console.print(json.dumps(result, indent=2))
             return
 
-        # Handle errors
         if "error" in result:
-            console.print(f"[red]Error:[/red] {result['error']}")
-            if "suggestion" in result:
-                console.print(f"[dim]{result['suggestion']}[/dim]")
+            _display_download_result(result, "audio")
             raise SystemExit(1)
 
-        # Handle dry-run
-        if result.get("dry_run"):
-            if result["operation"] == "download_all":
-                console.print(f"[yellow]DRY RUN:[/yellow] Would download {result['count']} audio files to: {result['output_dir']}")
-                console.print("\n[bold]Preview:[/bold]")
-                for art in result["artifacts"]:
-                    console.print(f"  {art['filename']} <- {art['title']}")
-            else:
-                console.print(f"[yellow]DRY RUN:[/yellow] Would download:")
-                console.print(f"  Artifact: {result['artifact']['title']}")
-                console.print(f"  Reason: {result['artifact']['selection_reason']}")
-                console.print(f"  Output: {result['output_path']}")
-            return
-
-        # Handle download_all results
-        if result.get("operation") == "download_all":
-            downloaded = [r for r in result["results"] if r["status"] == "downloaded"]
-            skipped = [r for r in result["results"] if r["status"] == "skipped"]
-            failed = [r for r in result["results"] if r["status"] == "failed"]
-
-            console.print(f"[bold]Downloaded {len(downloaded)}/{result['total']} audio files to:[/bold] {result['output_dir']}")
-
-            if downloaded:
-                console.print("\n[green]Downloaded:[/green]")
-                for r in downloaded:
-                    console.print(f"  {r['filename']} <- {r['title']}")
-
-            if skipped:
-                console.print("\n[yellow]Skipped:[/yellow]")
-                for r in skipped:
-                    console.print(f"  {r['filename']} ({r['reason']})")
-
-            if failed:
-                console.print("\n[red]Failed:[/red]")
-                for r in failed:
-                    console.print(f"  {r['filename']}: {r.get('error', 'unknown error')}")
-
-        # Handle single download
-        else:
-            console.print(f"[green]Audio saved to:[/green] {result['output_path']}")
-            console.print(f"[dim]Artifact: {result['artifact']['title']} ({result['artifact']['selection_reason']})[/dim]")
+        _display_download_result(result, "audio")
 
     except Exception as e:
         handle_error(e)
@@ -2007,289 +2102,35 @@ def download_video(ctx, output_path, notebook, latest, earliest, download_all, n
       # Preview without downloading
       notebooklm download video --all --dry-run
     """
-    from .download_helpers import select_artifact, artifact_title_to_filename
-    from pathlib import Path
-    from typing import Any
-
-    # Constants
-    VIDEO_EXTENSION = ".mp4"
-    DEFAULT_OUTPUT_DIR = "./video"
-
-    # Validate conflict flags
-    if force and no_clobber:
-        console.print("[red]Cannot specify both --force and --no-clobber[/red]")
-        raise SystemExit(1)
-
-    # Validate selection flags
-    if latest and earliest:
-        console.print("[red]Cannot specify both --latest and --earliest[/red]")
-        raise SystemExit(1)
-
-    if download_all and artifact_id:
-        console.print("[red]Cannot specify both --all and --artifact-id[/red]")
-        raise SystemExit(1)
-
-    def _resolve_file_conflict(
-        file_path: Path,
-        force: bool,
-        no_clobber: bool
-    ) -> tuple[Path | None, dict | None]:
-        """
-        Resolve file conflicts for download.
-
-        Returns:
-            tuple: (resolved_path, error_dict)
-            - If file can be used/created: (Path, None)
-            - If should skip (no_clobber): (None, error_dict)
-        """
-        if not file_path.exists():
-            return file_path, None
-
-        if no_clobber:
-            return None, {
-                "status": "skipped",
-                "reason": "file exists",
-                "path": str(file_path)
-            }
-
-        if not force:
-            # Auto-rename with (2), (3), etc.
-            counter = 2
-            base = file_path.stem
-            ext = file_path.suffix
-            parent = file_path.parent
-
-            while file_path.exists():
-                file_path = parent / f"{base} ({counter}){ext}"
-                counter += 1
-
-        return file_path, None
-
     try:
-        nb_id = require_notebook(notebook)
-        cookies, csrf, session_id = get_client(ctx)
-        auth = AuthTokens(cookies=cookies, csrf_token=csrf, session_id=session_id)
+        result = run_async(_download_artifacts_generic(
+            ctx=ctx,
+            artifact_type_name="video",
+            artifact_type_id=3,
+            file_extension=".mp4",
+            default_output_dir="./video",
+            output_path=output_path,
+            notebook=notebook,
+            latest=latest,
+            earliest=earliest,
+            download_all=download_all,
+            name=name,
+            artifact_id=artifact_id,
+            json_output=json_output,
+            dry_run=dry_run,
+            force=force,
+            no_clobber=no_clobber
+        ))
 
-        async def _download() -> dict[str, Any]:
-            async with NotebookLMClient(auth) as client:
-                # Get all artifacts and filter for video
-                all_artifacts = await client.list_artifacts(nb_id)
-
-                # Filter: type=3 (video), status=3 (completed)
-                video_artifacts_raw = [
-                    a for a in all_artifacts
-                    if isinstance(a, list) and len(a) > 4 and a[2] == 3 and a[4] == 3
-                ]
-
-                if not video_artifacts_raw:
-                    return {"error": "No completed video artifacts found"}
-
-                # Convert to dict format for select_artifact helper
-                video_artifacts = [
-                    {"id": a[0], "title": a[1], "created_at": a[3] if len(a) > 3 else 0}
-                    for a in video_artifacts_raw
-                ]
-
-                # Handle --all flag
-                if download_all:
-                    # Default directory for --all
-                    output_dir = Path(output_path) if output_path else Path(DEFAULT_OUTPUT_DIR)
-
-                    if dry_run:
-                        return {
-                            "dry_run": True,
-                            "operation": "download_all",
-                            "count": len(video_artifacts),
-                            "output_dir": str(output_dir),
-                            "artifacts": [
-                                {
-                                    "id": a["id"],
-                                    "title": a["title"],
-                                    "filename": artifact_title_to_filename(a["title"], VIDEO_EXTENSION, set())
-                                }
-                                for a in video_artifacts
-                            ]
-                        }
-
-                    # Create output directory
-                    output_dir.mkdir(parents=True, exist_ok=True)
-
-                    results = []
-                    existing_files = set()
-                    total = len(video_artifacts)
-
-                    for i, artifact in enumerate(video_artifacts, 1):
-                        # Progress indicator (not in JSON mode)
-                        if not json_output:
-                            console.print(f"[dim]Downloading {i}/{total}:[/dim] {artifact['title']}")
-
-                        # Generate filename
-                        filename = artifact_title_to_filename(
-                            artifact["title"], VIDEO_EXTENSION, existing_files
-                        )
-                        existing_files.add(filename)
-                        file_path = output_dir / filename
-
-                        # Resolve file conflicts
-                        resolved_path, skip_info = _resolve_file_conflict(file_path, force, no_clobber)
-                        if skip_info:
-                            results.append({
-                                "id": artifact["id"],
-                                "title": artifact["title"],
-                                "filename": filename,
-                                **skip_info
-                            })
-                            continue
-
-                        # Update filename if path was auto-renamed
-                        file_path = resolved_path
-                        filename = file_path.name
-
-                        # Download
-                        try:
-                            await client.download_video(nb_id, str(file_path), artifact_id=artifact["id"])
-                            results.append({
-                                "id": artifact["id"],
-                                "title": artifact["title"],
-                                "filename": filename,
-                                "path": str(file_path),
-                                "status": "downloaded"
-                            })
-                        except Exception as e:
-                            results.append({
-                                "id": artifact["id"],
-                                "title": artifact["title"],
-                                "filename": filename,
-                                "status": "failed",
-                                "error": str(e)
-                            })
-
-                    return {
-                        "operation": "download_all",
-                        "output_dir": str(output_dir),
-                        "total": len(video_artifacts),
-                        "results": results
-                    }
-
-                # Single artifact selection
-                try:
-                    selected, reason = select_artifact(
-                        video_artifacts,
-                        latest=latest,
-                        earliest=earliest,
-                        name=name,
-                        artifact_id=artifact_id
-                    )
-                except ValueError as e:
-                    return {"error": str(e)}
-
-                # Determine output path
-                if not output_path:
-                    # Default: ./[artifact-title].mp4
-                    default_filename = artifact_title_to_filename(selected["title"], VIDEO_EXTENSION, set())
-                    final_output_path = Path.cwd() / default_filename
-                else:
-                    final_output_path = Path(output_path)
-
-                if dry_run:
-                    return {
-                        "dry_run": True,
-                        "operation": "download_single",
-                        "artifact": {
-                            "id": selected["id"],
-                            "title": selected["title"],
-                            "selection_reason": reason
-                        },
-                        "output_path": str(final_output_path)
-                    }
-
-                # Resolve file conflicts
-                resolved_path, skip_error = _resolve_file_conflict(final_output_path, force, no_clobber)
-                if skip_error:
-                    return {
-                        "error": f"File exists: {final_output_path}",
-                        "artifact": selected,
-                        "suggestion": "Use --force to overwrite or choose a different path"
-                    }
-
-                final_output_path = resolved_path
-
-                # Download
-                try:
-                    result_path = await client.download_video(
-                        nb_id, str(final_output_path), artifact_id=selected["id"]
-                    )
-                    return {
-                        "operation": "download_single",
-                        "artifact": {
-                            "id": selected["id"],
-                            "title": selected["title"],
-                            "selection_reason": reason
-                        },
-                        "output_path": result_path,
-                        "status": "downloaded"
-                    }
-                except Exception as e:
-                    return {
-                        "error": str(e),
-                        "artifact": selected
-                    }
-
-        result = run_async(_download())
-
-        # Handle JSON output
         if json_output:
             console.print(json.dumps(result, indent=2))
             return
 
-        # Handle errors
         if "error" in result:
-            console.print(f"[red]Error:[/red] {result['error']}")
-            if "suggestion" in result:
-                console.print(f"[dim]{result['suggestion']}[/dim]")
+            _display_download_result(result, "video")
             raise SystemExit(1)
 
-        # Handle dry-run
-        if result.get("dry_run"):
-            if result["operation"] == "download_all":
-                console.print(f"[yellow]DRY RUN:[/yellow] Would download {result['count']} video files to: {result['output_dir']}")
-                console.print("\n[bold]Preview:[/bold]")
-                for art in result["artifacts"]:
-                    console.print(f"  {art['filename']} <- {art['title']}")
-            else:
-                console.print(f"[yellow]DRY RUN:[/yellow] Would download:")
-                console.print(f"  Artifact: {result['artifact']['title']}")
-                console.print(f"  Reason: {result['artifact']['selection_reason']}")
-                console.print(f"  Output: {result['output_path']}")
-            return
-
-        # Handle download_all results
-        if result.get("operation") == "download_all":
-            downloaded = [r for r in result["results"] if r["status"] == "downloaded"]
-            skipped = [r for r in result["results"] if r["status"] == "skipped"]
-            failed = [r for r in result["results"] if r["status"] == "failed"]
-
-            console.print(f"[bold]Downloaded {len(downloaded)}/{result['total']} video files to:[/bold] {result['output_dir']}")
-
-            if downloaded:
-                console.print("\n[green]Downloaded:[/green]")
-                for r in downloaded:
-                    console.print(f"  {r['filename']} <- {r['title']}")
-
-            if skipped:
-                console.print("\n[yellow]Skipped:[/yellow]")
-                for r in skipped:
-                    console.print(f"  {r['filename']} ({r['reason']})")
-
-            if failed:
-                console.print("\n[red]Failed:[/red]")
-                for r in failed:
-                    console.print(f"  {r['filename']}: {r.get('error', 'unknown error')}")
-
-        # Handle single download
-        else:
-            console.print(f"[green]Video saved to:[/green] {result['output_path']}")
-            console.print(f"[dim]Artifact: {result['artifact']['title']} ({result['artifact']['selection_reason']})[/dim]")
+        _display_download_result(result, "video")
 
     except Exception as e:
         handle_error(e)
@@ -2328,299 +2169,35 @@ def download_slide_deck(ctx, output_path, notebook, latest, earliest, download_a
       # Preview without downloading
       notebooklm download slide-deck --all --dry-run
     """
-    from .download_helpers import select_artifact, artifact_title_to_filename
-    from pathlib import Path
-    from typing import Any
-
-    # Constants
-    DEFAULT_OUTPUT_DIR = "./slide-deck"
-
-    # Validate conflict flags
-    if force and no_clobber:
-        console.print("[red]Cannot specify both --force and --no-clobber[/red]")
-        raise SystemExit(1)
-
-    # Validate selection flags
-    if latest and earliest:
-        console.print("[red]Cannot specify both --latest and --earliest[/red]")
-        raise SystemExit(1)
-
-    if download_all and artifact_id:
-        console.print("[red]Cannot specify both --all and --artifact-id[/red]")
-        raise SystemExit(1)
-
-    def _resolve_dir_conflict(
-        dir_path: Path,
-        force: bool,
-        no_clobber: bool
-    ) -> tuple[Path | None, dict | None]:
-        """
-        Resolve directory conflicts for download.
-
-        Returns:
-            tuple: (resolved_path, error_dict)
-            - If directory can be used/created: (Path, None)
-            - If should skip (no_clobber): (None, error_dict)
-        """
-        if not dir_path.exists():
-            return dir_path, None
-
-        if no_clobber:
-            return None, {
-                "status": "skipped",
-                "reason": "directory exists",
-                "path": str(dir_path)
-            }
-
-        if not force:
-            # Auto-rename with (2), (3), etc.
-            counter = 2
-            base_name = dir_path.name
-            parent = dir_path.parent
-
-            while dir_path.exists():
-                dir_path = parent / f"{base_name} ({counter})"
-                counter += 1
-
-        return dir_path, None
-
     try:
-        nb_id = require_notebook(notebook)
-        cookies, csrf, session_id = get_client(ctx)
-        auth = AuthTokens(cookies=cookies, csrf_token=csrf, session_id=session_id)
+        result = run_async(_download_artifacts_generic(
+            ctx=ctx,
+            artifact_type_name="slide-deck",
+            artifact_type_id=8,
+            file_extension="",  # Empty string for directory type
+            default_output_dir="./slide-deck",
+            output_path=output_path,
+            notebook=notebook,
+            latest=latest,
+            earliest=earliest,
+            download_all=download_all,
+            name=name,
+            artifact_id=artifact_id,
+            json_output=json_output,
+            dry_run=dry_run,
+            force=force,
+            no_clobber=no_clobber
+        ))
 
-        async def _download() -> dict[str, Any]:
-            async with NotebookLMClient(auth) as client:
-                # Get all artifacts and filter for slide decks
-                all_artifacts = await client.list_artifacts(nb_id)
-
-                # Filter: type=8 (slide deck), status=3 (completed)
-                slide_artifacts_raw = [
-                    a for a in all_artifacts
-                    if isinstance(a, list) and len(a) > 4 and a[2] == 8 and a[4] == 3
-                ]
-
-                if not slide_artifacts_raw:
-                    return {"error": "No completed slide deck artifacts found"}
-
-                # Convert to dict format for select_artifact helper
-                slide_artifacts = [
-                    {"id": a[0], "title": a[1], "created_at": a[3] if len(a) > 3 else 0}
-                    for a in slide_artifacts_raw
-                ]
-
-                # Handle --all flag
-                if download_all:
-                    # Default parent directory for --all
-                    parent_dir = Path(output_path) if output_path else Path(DEFAULT_OUTPUT_DIR)
-
-                    if dry_run:
-                        return {
-                            "dry_run": True,
-                            "operation": "download_all",
-                            "count": len(slide_artifacts),
-                            "parent_dir": str(parent_dir),
-                            "artifacts": [
-                                {
-                                    "id": a["id"],
-                                    "title": a["title"],
-                                    "dirname": artifact_title_to_filename(a["title"], "", set())
-                                }
-                                for a in slide_artifacts
-                            ]
-                        }
-
-                    # Create parent directory
-                    parent_dir.mkdir(parents=True, exist_ok=True)
-
-                    results = []
-                    existing_dirs = set()
-                    total = len(slide_artifacts)
-
-                    for i, artifact in enumerate(slide_artifacts, 1):
-                        # Progress indicator (not in JSON mode)
-                        if not json_output:
-                            console.print(f"[dim]Downloading {i}/{total}:[/dim] {artifact['title']}")
-
-                        # Generate directory name
-                        dirname = artifact_title_to_filename(
-                            artifact["title"], "", existing_dirs
-                        )
-                        existing_dirs.add(dirname)
-                        dir_path = parent_dir / dirname
-
-                        # Resolve directory conflicts
-                        resolved_path, skip_info = _resolve_dir_conflict(dir_path, force, no_clobber)
-                        if skip_info:
-                            results.append({
-                                "id": artifact["id"],
-                                "title": artifact["title"],
-                                "dirname": dirname,
-                                **skip_info
-                            })
-                            continue
-
-                        # Update dirname if path was auto-renamed
-                        dir_path = resolved_path
-                        dirname = dir_path.name
-
-                        # Download
-                        try:
-                            # Create the directory
-                            dir_path.mkdir(parents=True, exist_ok=True)
-
-                            # Download slides into the directory
-                            slide_paths = await client.download_slide_deck(
-                                nb_id, str(dir_path), artifact_id=artifact["id"]
-                            )
-                            results.append({
-                                "id": artifact["id"],
-                                "title": artifact["title"],
-                                "dirname": dirname,
-                                "path": str(dir_path),
-                                "slide_count": len(slide_paths),
-                                "status": "downloaded"
-                            })
-                        except Exception as e:
-                            results.append({
-                                "id": artifact["id"],
-                                "title": artifact["title"],
-                                "dirname": dirname,
-                                "status": "failed",
-                                "error": str(e)
-                            })
-
-                    return {
-                        "operation": "download_all",
-                        "parent_dir": str(parent_dir),
-                        "total": len(slide_artifacts),
-                        "results": results
-                    }
-
-                # Single artifact selection
-                try:
-                    selected, reason = select_artifact(
-                        slide_artifacts,
-                        latest=latest,
-                        earliest=earliest,
-                        name=name,
-                        artifact_id=artifact_id
-                    )
-                except ValueError as e:
-                    return {"error": str(e)}
-
-                # Determine output path
-                if not output_path:
-                    # Default: ./[artifact-title]/
-                    default_dirname = artifact_title_to_filename(selected["title"], "", set())
-                    final_output_path = Path.cwd() / default_dirname
-                else:
-                    final_output_path = Path(output_path)
-
-                if dry_run:
-                    return {
-                        "dry_run": True,
-                        "operation": "download_single",
-                        "artifact": {
-                            "id": selected["id"],
-                            "title": selected["title"],
-                            "selection_reason": reason
-                        },
-                        "output_path": str(final_output_path)
-                    }
-
-                # Resolve directory conflicts
-                resolved_path, skip_error = _resolve_dir_conflict(final_output_path, force, no_clobber)
-                if skip_error:
-                    return {
-                        "error": f"Directory exists: {final_output_path}",
-                        "artifact": selected,
-                        "suggestion": "Use --force to overwrite or choose a different path"
-                    }
-
-                final_output_path = resolved_path
-
-                # Download
-                try:
-                    # Create the directory
-                    final_output_path.mkdir(parents=True, exist_ok=True)
-
-                    # Download slides into the directory
-                    slide_paths = await client.download_slide_deck(
-                        nb_id, str(final_output_path), artifact_id=selected["id"]
-                    )
-                    return {
-                        "operation": "download_single",
-                        "artifact": {
-                            "id": selected["id"],
-                            "title": selected["title"],
-                            "selection_reason": reason
-                        },
-                        "output_path": str(final_output_path),
-                        "slide_count": len(slide_paths),
-                        "status": "downloaded"
-                    }
-                except Exception as e:
-                    return {
-                        "error": str(e),
-                        "artifact": selected
-                    }
-
-        result = run_async(_download())
-
-        # Handle JSON output
         if json_output:
             console.print(json.dumps(result, indent=2))
             return
 
-        # Handle errors
         if "error" in result:
-            console.print(f"[red]Error:[/red] {result['error']}")
-            if "suggestion" in result:
-                console.print(f"[dim]{result['suggestion']}[/dim]")
+            _display_download_result(result, "slide-deck")
             raise SystemExit(1)
 
-        # Handle dry-run
-        if result.get("dry_run"):
-            if result["operation"] == "download_all":
-                console.print(f"[yellow]DRY RUN:[/yellow] Would download {result['count']} slide decks to: {result['parent_dir']}")
-                console.print("\n[bold]Preview:[/bold]")
-                for art in result["artifacts"]:
-                    console.print(f"  {art['dirname']}/ <- {art['title']}")
-            else:
-                console.print(f"[yellow]DRY RUN:[/yellow] Would download:")
-                console.print(f"  Artifact: {result['artifact']['title']}")
-                console.print(f"  Reason: {result['artifact']['selection_reason']}")
-                console.print(f"  Output: {result['output_path']}/")
-            return
-
-        # Handle download_all results
-        if result.get("operation") == "download_all":
-            downloaded = [r for r in result["results"] if r["status"] == "downloaded"]
-            skipped = [r for r in result["results"] if r["status"] == "skipped"]
-            failed = [r for r in result["results"] if r["status"] == "failed"]
-
-            console.print(f"[bold]Downloaded {len(downloaded)}/{result['total']} slide decks to:[/bold] {result['parent_dir']}")
-
-            if downloaded:
-                console.print("\n[green]Downloaded:[/green]")
-                for r in downloaded:
-                    console.print(f"  {r['dirname']}/ ({r['slide_count']} slides) <- {r['title']}")
-
-            if skipped:
-                console.print("\n[yellow]Skipped:[/yellow]")
-                for r in skipped:
-                    console.print(f"  {r['dirname']}/ ({r['reason']})")
-
-            if failed:
-                console.print("\n[red]Failed:[/red]")
-                for r in failed:
-                    console.print(f"  {r['dirname']}/: {r.get('error', 'unknown error')}")
-
-        # Handle single download
-        else:
-            console.print(f"[green]Slide deck saved to:[/green] {result['output_path']}/ ({result['slide_count']} slides)")
-            console.print(f"[dim]Artifact: {result['artifact']['title']} ({result['artifact']['selection_reason']})[/dim]")
+        _display_download_result(result, "slide-deck")
 
     except Exception as e:
         handle_error(e)
@@ -2659,289 +2236,35 @@ def download_infographic(ctx, output_path, notebook, latest, earliest, download_
       # Preview without downloading
       notebooklm download infographic --all --dry-run
     """
-    from .download_helpers import select_artifact, artifact_title_to_filename
-    from pathlib import Path
-    from typing import Any
-
-    # Constants
-    INFOGRAPHIC_EXTENSION = ".png"
-    DEFAULT_OUTPUT_DIR = "./infographic"
-
-    # Validate conflict flags
-    if force and no_clobber:
-        console.print("[red]Cannot specify both --force and --no-clobber[/red]")
-        raise SystemExit(1)
-
-    # Validate selection flags
-    if latest and earliest:
-        console.print("[red]Cannot specify both --latest and --earliest[/red]")
-        raise SystemExit(1)
-
-    if download_all and artifact_id:
-        console.print("[red]Cannot specify both --all and --artifact-id[/red]")
-        raise SystemExit(1)
-
-    def _resolve_file_conflict(
-        file_path: Path,
-        force: bool,
-        no_clobber: bool
-    ) -> tuple[Path | None, dict | None]:
-        """
-        Resolve file conflicts for download.
-
-        Returns:
-            tuple: (resolved_path, error_dict)
-            - If file can be used/created: (Path, None)
-            - If should skip (no_clobber): (None, error_dict)
-        """
-        if not file_path.exists():
-            return file_path, None
-
-        if no_clobber:
-            return None, {
-                "status": "skipped",
-                "reason": "file exists",
-                "path": str(file_path)
-            }
-
-        if not force:
-            # Auto-rename with (2), (3), etc.
-            counter = 2
-            base = file_path.stem
-            ext = file_path.suffix
-            parent = file_path.parent
-
-            while file_path.exists():
-                file_path = parent / f"{base} ({counter}){ext}"
-                counter += 1
-
-        return file_path, None
-
     try:
-        nb_id = require_notebook(notebook)
-        cookies, csrf, session_id = get_client(ctx)
-        auth = AuthTokens(cookies=cookies, csrf_token=csrf, session_id=session_id)
+        result = run_async(_download_artifacts_generic(
+            ctx=ctx,
+            artifact_type_name="infographic",
+            artifact_type_id=7,
+            file_extension=".png",
+            default_output_dir="./infographic",
+            output_path=output_path,
+            notebook=notebook,
+            latest=latest,
+            earliest=earliest,
+            download_all=download_all,
+            name=name,
+            artifact_id=artifact_id,
+            json_output=json_output,
+            dry_run=dry_run,
+            force=force,
+            no_clobber=no_clobber
+        ))
 
-        async def _download() -> dict[str, Any]:
-            async with NotebookLMClient(auth) as client:
-                # Get all artifacts and filter for infographic
-                all_artifacts = await client.list_artifacts(nb_id)
-
-                # Filter: type=7 (infographic), status=3 (completed)
-                infographic_artifacts_raw = [
-                    a for a in all_artifacts
-                    if isinstance(a, list) and len(a) > 4 and a[2] == 7 and a[4] == 3
-                ]
-
-                if not infographic_artifacts_raw:
-                    return {"error": "No completed infographic artifacts found"}
-
-                # Convert to dict format for select_artifact helper
-                infographic_artifacts = [
-                    {"id": a[0], "title": a[1], "created_at": a[3] if len(a) > 3 else 0}
-                    for a in infographic_artifacts_raw
-                ]
-
-                # Handle --all flag
-                if download_all:
-                    # Default directory for --all
-                    output_dir = Path(output_path) if output_path else Path(DEFAULT_OUTPUT_DIR)
-
-                    if dry_run:
-                        return {
-                            "dry_run": True,
-                            "operation": "download_all",
-                            "count": len(infographic_artifacts),
-                            "output_dir": str(output_dir),
-                            "artifacts": [
-                                {
-                                    "id": a["id"],
-                                    "title": a["title"],
-                                    "filename": artifact_title_to_filename(a["title"], INFOGRAPHIC_EXTENSION, set())
-                                }
-                                for a in infographic_artifacts
-                            ]
-                        }
-
-                    # Create output directory
-                    output_dir.mkdir(parents=True, exist_ok=True)
-
-                    results = []
-                    existing_files = set()
-                    total = len(infographic_artifacts)
-
-                    for i, artifact in enumerate(infographic_artifacts, 1):
-                        # Progress indicator (not in JSON mode)
-                        if not json_output:
-                            console.print(f"[dim]Downloading {i}/{total}:[/dim] {artifact['title']}")
-
-                        # Generate filename
-                        filename = artifact_title_to_filename(
-                            artifact["title"], INFOGRAPHIC_EXTENSION, existing_files
-                        )
-                        existing_files.add(filename)
-                        file_path = output_dir / filename
-
-                        # Resolve file conflicts
-                        resolved_path, skip_info = _resolve_file_conflict(file_path, force, no_clobber)
-                        if skip_info:
-                            results.append({
-                                "id": artifact["id"],
-                                "title": artifact["title"],
-                                "filename": filename,
-                                **skip_info
-                            })
-                            continue
-
-                        # Update filename if path was auto-renamed
-                        file_path = resolved_path
-                        filename = file_path.name
-
-                        # Download
-                        try:
-                            await client.download_infographic(nb_id, str(file_path), artifact_id=artifact["id"])
-                            results.append({
-                                "id": artifact["id"],
-                                "title": artifact["title"],
-                                "filename": filename,
-                                "path": str(file_path),
-                                "status": "downloaded"
-                            })
-                        except Exception as e:
-                            results.append({
-                                "id": artifact["id"],
-                                "title": artifact["title"],
-                                "filename": filename,
-                                "status": "failed",
-                                "error": str(e)
-                            })
-
-                    return {
-                        "operation": "download_all",
-                        "output_dir": str(output_dir),
-                        "total": len(infographic_artifacts),
-                        "results": results
-                    }
-
-                # Single artifact selection
-                try:
-                    selected, reason = select_artifact(
-                        infographic_artifacts,
-                        latest=latest,
-                        earliest=earliest,
-                        name=name,
-                        artifact_id=artifact_id
-                    )
-                except ValueError as e:
-                    return {"error": str(e)}
-
-                # Determine output path
-                if not output_path:
-                    # Default: ./[artifact-title].png
-                    default_filename = artifact_title_to_filename(selected["title"], INFOGRAPHIC_EXTENSION, set())
-                    final_output_path = Path.cwd() / default_filename
-                else:
-                    final_output_path = Path(output_path)
-
-                if dry_run:
-                    return {
-                        "dry_run": True,
-                        "operation": "download_single",
-                        "artifact": {
-                            "id": selected["id"],
-                            "title": selected["title"],
-                            "selection_reason": reason
-                        },
-                        "output_path": str(final_output_path)
-                    }
-
-                # Resolve file conflicts
-                resolved_path, skip_error = _resolve_file_conflict(final_output_path, force, no_clobber)
-                if skip_error:
-                    return {
-                        "error": f"File exists: {final_output_path}",
-                        "artifact": selected,
-                        "suggestion": "Use --force to overwrite or choose a different path"
-                    }
-
-                final_output_path = resolved_path
-
-                # Download
-                try:
-                    result_path = await client.download_infographic(
-                        nb_id, str(final_output_path), artifact_id=selected["id"]
-                    )
-                    return {
-                        "operation": "download_single",
-                        "artifact": {
-                            "id": selected["id"],
-                            "title": selected["title"],
-                            "selection_reason": reason
-                        },
-                        "output_path": result_path,
-                        "status": "downloaded"
-                    }
-                except Exception as e:
-                    return {
-                        "error": str(e),
-                        "artifact": selected
-                    }
-
-        result = run_async(_download())
-
-        # Handle JSON output
         if json_output:
             console.print(json.dumps(result, indent=2))
             return
 
-        # Handle errors
         if "error" in result:
-            console.print(f"[red]Error:[/red] {result['error']}")
-            if "suggestion" in result:
-                console.print(f"[dim]{result['suggestion']}[/dim]")
+            _display_download_result(result, "infographic")
             raise SystemExit(1)
 
-        # Handle dry-run
-        if result.get("dry_run"):
-            if result["operation"] == "download_all":
-                console.print(f"[yellow]DRY RUN:[/yellow] Would download {result['count']} infographic files to: {result['output_dir']}")
-                console.print("\n[bold]Preview:[/bold]")
-                for art in result["artifacts"]:
-                    console.print(f"  {art['filename']} <- {art['title']}")
-            else:
-                console.print(f"[yellow]DRY RUN:[/yellow] Would download:")
-                console.print(f"  Artifact: {result['artifact']['title']}")
-                console.print(f"  Reason: {result['artifact']['selection_reason']}")
-                console.print(f"  Output: {result['output_path']}")
-            return
-
-        # Handle download_all results
-        if result.get("operation") == "download_all":
-            downloaded = [r for r in result["results"] if r["status"] == "downloaded"]
-            skipped = [r for r in result["results"] if r["status"] == "skipped"]
-            failed = [r for r in result["results"] if r["status"] == "failed"]
-
-            console.print(f"[bold]Downloaded {len(downloaded)}/{result['total']} infographic files to:[/bold] {result['output_dir']}")
-
-            if downloaded:
-                console.print("\n[green]Downloaded:[/green]")
-                for r in downloaded:
-                    console.print(f"  {r['filename']} <- {r['title']}")
-
-            if skipped:
-                console.print("\n[yellow]Skipped:[/yellow]")
-                for r in skipped:
-                    console.print(f"  {r['filename']} ({r['reason']})")
-
-            if failed:
-                console.print("\n[red]Failed:[/red]")
-                for r in failed:
-                    console.print(f"  {r['filename']}: {r.get('error', 'unknown error')}")
-
-        # Handle single download
-        else:
-            console.print(f"[green]Infographic saved to:[/green] {result['output_path']}")
-            console.print(f"[dim]Artifact: {result['artifact']['title']} ({result['artifact']['selection_reason']})[/dim]")
+        _display_download_result(result, "infographic")
 
     except Exception as e:
         handle_error(e)

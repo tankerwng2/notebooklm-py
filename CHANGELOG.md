@@ -28,6 +28,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `select_artifact()` helper for intelligent artifact selection
 - `artifact_title_to_filename()` helper for safe filename conversion
+- `_download_artifacts_generic()` - Generic download implementation for all artifact types
+- `_display_download_result()` - Unified result display helper
+
+### Refactored
+- Eliminated 677 lines of duplicated download code (21.4% reduction):
+  - Before: 4 commands × ~320 lines = ~1,280 lines of duplicated logic
+  - After: 1 generic function (~300 lines) + 4 thin wrappers (~65 lines each)
+  - Result: Improved maintainability and consistency across all download commands
 
 ## [0.1.0] - 2026-01-05
 
