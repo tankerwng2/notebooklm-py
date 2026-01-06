@@ -264,48 +264,55 @@ async def download_with_browser(
         try:
             page = await context.new_page()
 
-            # Set up download handling
-            download_path = None
+            # Use expect_download to properly handle download-triggering URLs
+            # page.goto() throws when navigation triggers a download
+            try:
+                async with page.expect_download(timeout=timeout * 1000) as download_info:
+                    # This will raise an exception because download starts
+                    try:
+                        await page.goto(url, timeout=timeout * 1000)
+                    except Exception:
+                        # Expected - navigation is interrupted by download
+                        pass
 
-            async def handle_download(download):
-                nonlocal download_path
-                download_path = await download.path()
+                download = await download_info.value
+                # Save download to the target path
+                await download.save_as(output_path)
+                return output_path
 
-            page.on("download", handle_download)
+            except Exception as e:
+                # If expect_download times out or fails, try direct navigation
+                # This handles cases where the URL returns content directly
+                error_msg = str(e)
 
-            # Navigate to the URL - this triggers download for media files
-            response = await page.goto(url, timeout=timeout * 1000)
+                # If it's a timeout waiting for download, the URL might serve content directly
+                if "Timeout" in error_msg or "waiting for download" in error_msg.lower():
+                    response = await page.goto(url, timeout=timeout * 1000)
 
-            # Check if we got redirected to login
-            if response and "accounts.google.com" in page.url:
-                raise ValueError(
-                    "Authentication required. Run 'notebooklm login' to re-authenticate."
-                )
+                    # Check if we got redirected to login
+                    if "accounts.google.com" in page.url:
+                        raise ValueError(
+                            "Authentication required. Run 'notebooklm login' to re-authenticate."
+                        )
 
-            # For direct content (not download), save the response body
-            if download_path is None:
-                # Check content type
-                content_type = response.headers.get("content-type", "") if response else ""
+                    if response:
+                        content_type = response.headers.get("content-type", "")
 
-                if "text/html" in content_type:
-                    # This is likely a login page
-                    raise ValueError(
-                        "Download failed: received HTML instead of media file. "
-                        "Authentication may have expired. Run 'notebooklm login'."
-                    )
+                        if "text/html" in content_type:
+                            raise ValueError(
+                                "Download failed: received HTML instead of media file. "
+                                "Authentication may have expired. Run 'notebooklm login'."
+                            )
 
-                # Save the response body directly
-                content = await response.body() if response else b""
-                if not content:
-                    raise ValueError("Download failed: empty response")
+                        # Save the response body directly
+                        content = await response.body()
+                        if not content:
+                            raise ValueError("Download failed: empty response")
 
-                output_file.write_bytes(content)
-            else:
-                # Move downloaded file to output path
-                import shutil
-                shutil.move(download_path, output_path)
+                        output_file.write_bytes(content)
+                        return output_path
 
-            return output_path
+                raise ValueError(f"Download failed: {e}")
 
         finally:
             await context.close()

@@ -495,16 +495,19 @@ class NotebookLMClient:
 
         try:
             metadata = None
-            # Search for metadata similar to infographic
+            # Search for metadata - structure: [[null, lang_code, ...], "Title", [[slide1], ...]]
             for item in reversed(slide_art):
                 if (
                     isinstance(item, list)
                     and len(item) > 2
                     and isinstance(item[0], list)
                     and len(item[0]) > 1
-                    and item[0][1] == "en"
+                    and isinstance(item[0][1], str)  # Language code (e.g., "en", "zh_hans")
+                    and isinstance(item[2], list)  # Slides list
+                    and len(item[2]) > 0
+                    and isinstance(item[2][0], list)  # First slide
                 ):
-                    # Likely metadata: [[null, "en"], "Title", [[slide1], [slide2]...]]
+                    # Metadata: [[null, "en"], "Title", [[slide1], [slide2]...]]
                     metadata = item
                     break
 
