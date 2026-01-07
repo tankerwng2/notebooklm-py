@@ -238,23 +238,78 @@ await client.sources.refresh(nb_id, src.id)  # Re-fetch URL content
 
 ### ArtifactsAPI (`client.artifacts`)
 
+#### Core Methods
+
 | Method | Parameters | Returns | Description |
 |--------|------------|---------|-------------|
-| `list(notebook_id, type=None)` | `str, StudioContentType` | `list[Artifact]` | List artifacts |
+| `list(notebook_id, type=None)` | `str, int` | `list[Artifact]` | List artifacts |
 | `get(notebook_id, artifact_id)` | `str, str` | `Artifact` | Get artifact details |
 | `delete(notebook_id, artifact_id)` | `str, str` | `bool` | Delete artifact |
-| `rename(artifact_id, new_title)` | `str, str` | `bool` | Rename artifact |
-| `poll_status(notebook_id, task_id)` | `str, str` | `ArtifactStatus` | Check generation status |
-| `wait_for_completion(notebook_id, task_id, ...)` | `str, str, ...` | `ArtifactStatus` | Wait for generation |
+| `rename(notebook_id, artifact_id, new_title)` | `str, str, str` | `None` | Rename artifact |
+| `poll_status(notebook_id, task_id)` | `str, str` | `GenerationStatus` | Check generation status |
+| `wait_for_completion(notebook_id, task_id, ...)` | `str, str, ...` | `GenerationStatus` | Wait for generation |
+
+#### Type-Specific List Methods
+
+| Method | Parameters | Returns | Description |
+|--------|------------|---------|-------------|
+| `list_audio(notebook_id)` | `str` | `list[Artifact]` | List audio overview artifacts |
+| `list_video(notebook_id)` | `str` | `list[Artifact]` | List video overview artifacts |
+| `list_reports(notebook_id)` | `str` | `list[Artifact]` | List report artifacts (Briefing Doc, Study Guide, Blog Post) |
+| `list_quizzes(notebook_id)` | `str` | `list[Artifact]` | List quiz artifacts |
+| `list_flashcards(notebook_id)` | `str` | `list[Artifact]` | List flashcard artifacts |
+| `list_infographics(notebook_id)` | `str` | `list[Artifact]` | List infographic artifacts |
+| `list_slide_decks(notebook_id)` | `str` | `list[Artifact]` | List slide deck artifacts |
+| `list_data_tables(notebook_id)` | `str` | `list[Artifact]` | List data table artifacts |
+
+#### Generation Methods
+
+| Method | Parameters | Returns | Description |
+|--------|------------|---------|-------------|
 | `generate_audio(...)` | See below | `GenerationStatus` | Generate podcast |
 | `generate_video(...)` | See below | `GenerationStatus` | Generate video |
 | `generate_report(...)` | See below | `GenerationStatus` | Generate report |
 | `generate_quiz(...)` | See below | `GenerationStatus` | Generate quiz |
 | `generate_flashcards(...)` | See below | `GenerationStatus` | Generate flashcards |
-| `generate_slides(...)` | See below | `GenerationStatus` | Generate slide deck |
+| `generate_slide_deck(...)` | See below | `GenerationStatus` | Generate slide deck |
 | `generate_infographic(...)` | See below | `GenerationStatus` | Generate infographic |
 | `generate_data_table(...)` | See below | `GenerationStatus` | Generate data table |
-| `generate_mind_map(...)` | See below | `GenerationStatus` | Generate mind map |
+| `generate_mind_map(...)` | See below | `dict` | Generate mind map |
+
+#### Downloading Artifacts
+
+| Method | Parameters | Returns | Description |
+|--------|------------|---------|-------------|
+| `download_audio(notebook_id, output_path, artifact_id=None)` | `str, str, str` | `str` | Download audio to file (MP4/MP3) |
+| `download_video(notebook_id, output_path, artifact_id=None)` | `str, str, str` | `str` | Download video to file (MP4) |
+| `download_infographic(notebook_id, output_path, artifact_id=None)` | `str, str, str` | `str` | Download infographic to file (PNG) |
+| `download_slide_deck(notebook_id, output_dir, artifact_id=None)` | `str, str, str` | `list[str]` | Download slides to directory (PNGs) |
+
+**Download Methods:**
+
+```python
+# Download the most recent completed audio overview
+path = await client.artifacts.download_audio(nb_id, "podcast.mp4")
+
+# Download a specific audio artifact by ID
+path = await client.artifacts.download_audio(nb_id, "podcast.mp4", artifact_id="abc123")
+
+# Download video overview
+path = await client.artifacts.download_video(nb_id, "video.mp4")
+
+# Download infographic
+path = await client.artifacts.download_infographic(nb_id, "infographic.png")
+
+# Download slide deck (creates multiple files)
+slide_paths = await client.artifacts.download_slide_deck(nb_id, "./slides/")
+# Returns: ["./slides/slide_001.png", "./slides/slide_002.png", ...]
+```
+
+**Notes:**
+- If `artifact_id` is not specified, downloads the first completed artifact of that type
+- Raises `ValueError` if no completed artifact is found
+- `download_slide_deck` creates the output directory if it doesn't exist
+- Some URLs require browser-based download (handled automatically)
 
 **Generation Methods:**
 
@@ -358,27 +413,61 @@ await client.chat.configure(
 
 | Method | Parameters | Returns | Description |
 |--------|------------|---------|-------------|
-| `start_fast(notebook_id, query, source)` | `str, str, str` | `dict` | Start fast research |
-| `start_deep(notebook_id, query, source)` | `str, str, str` | `dict` | Start deep research |
-| `poll_status(notebook_id)` | `str` | `dict` | Check research status |
-| `import_sources(notebook_id, task_id, sources)` | `str, str, list` | `bool` | Import findings |
+| `start(notebook_id, query, source, mode)` | `str, str, str="web", str="fast"` | `dict` | Start research (mode: "fast" or "deep") |
+| `poll(notebook_id)` | `str` | `dict` | Check research status |
+| `import_sources(notebook_id, task_id, sources)` | `str, str, list` | `list[dict]` | Import findings |
+
+**Method Signatures:**
+
+```python
+async def start(
+    notebook_id: str,
+    query: str,
+    source: str = "web",   # "web" or "drive"
+    mode: str = "fast",    # "fast" or "deep" (deep only for web)
+) -> dict:
+    """
+    Returns: {"task_id": str, "report_id": str, "notebook_id": str, "query": str, "mode": str}
+    Raises: ValueError if source/mode combination is invalid
+    """
+
+async def poll(notebook_id: str) -> dict:
+    """
+    Returns: {"task_id": str, "status": str, "query": str, "sources": list, "summary": str}
+    Status is "completed", "in_progress", or "no_research"
+    """
+
+async def import_sources(notebook_id: str, task_id: str, sources: list[dict]) -> list[dict]:
+    """
+    sources: List of dicts with 'url' and 'title' keys
+    Returns: List of imported sources with 'id' and 'title'
+    """
+```
 
 **Example:**
 ```python
-# Start deep web research
-result = await client.research.start_deep(nb_id, "AI safety regulations", "web")
+# Start fast web research (default)
+result = await client.research.start(nb_id, "AI safety regulations")
 task_id = result["task_id"]
+
+# Start deep web research
+result = await client.research.start(nb_id, "quantum computing", source="web", mode="deep")
+task_id = result["task_id"]
+
+# Start fast Drive research
+result = await client.research.start(nb_id, "project docs", source="drive", mode="fast")
 
 # Poll until complete
 import asyncio
 while True:
-    status = await client.research.poll_status(nb_id)
+    status = await client.research.poll(nb_id)
     if status["status"] == "completed":
         break
     await asyncio.sleep(10)
 
 # Import discovered sources
-await client.research.import_sources(nb_id, task_id, status["sources"])
+imported = await client.research.import_sources(nb_id, task_id, status["sources"][:5])
+print(f"Imported {len(imported)} sources")
 ```
 
 ---
