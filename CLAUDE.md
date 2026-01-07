@@ -13,7 +13,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Development Commands
 
 ```bash
-# Activate virtual environment FIRST
+# Create/recreate venv with uv (recommended - relocatable venvs)
+uv venv .venv
+uv pip install -e ".[all]"
+playwright install chromium
+
+# Activate virtual environment
 source .venv/bin/activate
 
 # Run all tests (excluding e2e by default)
@@ -24,10 +29,6 @@ pytest --cov
 
 # Run e2e tests (requires authentication)
 pytest tests/e2e -m e2e
-
-# Install in development mode
-pip install -e ".[all]"
-playwright install chromium
 
 # CLI testing
 notebooklm --help
