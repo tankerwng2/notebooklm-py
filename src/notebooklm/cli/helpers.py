@@ -192,24 +192,29 @@ def require_notebook(notebook_id: str | None) -> str:
     raise SystemExit(1)
 
 
-async def resolve_notebook_id(client, partial_id: str) -> str:
-    """Resolve partial notebook ID to full ID.
+async def _resolve_partial_id(
+    partial_id: str,
+    list_fn,
+    entity_name: str,
+    list_command: str,
+) -> str:
+    """Generic partial ID resolver.
 
     Allows users to type partial IDs like 'abc' instead of full UUIDs.
     Matches are case-insensitive prefix matches.
 
     Args:
-        client: NotebookLMClient instance (inside async context)
-        partial_id: Full or partial notebook ID
+        partial_id: Full or partial ID to resolve
+        list_fn: Async function that returns list of items with id/title attributes
+        entity_name: Name for error messages (e.g., "notebook", "source")
+        list_command: CLI command to list items (e.g., "list", "source list")
 
     Returns:
-        Full notebook ID
+        Full ID of the matched item
 
     Raises:
         click.ClickException: If no match or ambiguous match
     """
-    import click
-
     if not partial_id:
         return partial_id
 
@@ -217,125 +222,59 @@ async def resolve_notebook_id(client, partial_id: str) -> str:
     if len(partial_id) >= 20:
         return partial_id
 
-    notebooks = await client.notebooks.list()
-    matches = [nb for nb in notebooks
-               if nb.id.lower().startswith(partial_id.lower())]
+    items = await list_fn()
+    matches = [item for item in items
+               if item.id.lower().startswith(partial_id.lower())]
 
     if len(matches) == 1:
         if matches[0].id != partial_id:
-            console.print(f"[dim]Matched: {matches[0].id[:12]}... ({matches[0].title})[/dim]")
+            title = matches[0].title or "(untitled)"
+            console.print(f"[dim]Matched: {matches[0].id[:12]}... ({title})[/dim]")
         return matches[0].id
     elif len(matches) == 0:
         raise click.ClickException(
-            f"No notebook found starting with '{partial_id}'. "
-            "Run 'notebooklm list' to see available notebooks."
+            f"No {entity_name} found starting with '{partial_id}'. "
+            f"Run 'notebooklm {list_command}' to see available {entity_name}s."
         )
     else:
-        lines = [f"Ambiguous ID '{partial_id}' matches {len(matches)} notebooks:"]
-        for nb in matches[:5]:
-            lines.append(f"  {nb.id[:12]}... {nb.title}")
+        lines = [f"Ambiguous ID '{partial_id}' matches {len(matches)} {entity_name}s:"]
+        for item in matches[:5]:
+            title = item.title or "(untitled)"
+            lines.append(f"  {item.id[:12]}... {title}")
         if len(matches) > 5:
             lines.append(f"  ... and {len(matches) - 5} more")
         lines.append("\nSpecify more characters to narrow down.")
         raise click.ClickException("\n".join(lines))
+
+
+async def resolve_notebook_id(client, partial_id: str) -> str:
+    """Resolve partial notebook ID to full ID."""
+    return await _resolve_partial_id(
+        partial_id,
+        list_fn=lambda: client.notebooks.list(),
+        entity_name="notebook",
+        list_command="list",
+    )
 
 
 async def resolve_source_id(client, notebook_id: str, partial_id: str) -> str:
-    """Resolve partial source ID to full ID.
-
-    Allows users to type partial IDs like 'abc' instead of full UUIDs.
-    Matches are case-insensitive prefix matches.
-
-    Args:
-        client: NotebookLMClient instance (inside async context)
-        notebook_id: Full notebook ID
-        partial_id: Full or partial source ID
-
-    Returns:
-        Full source ID
-
-    Raises:
-        click.ClickException: If no match or ambiguous match
-    """
-    import click
-
-    if not partial_id:
-        return partial_id
-
-    # Skip resolution for IDs that look complete (20+ chars)
-    if len(partial_id) >= 20:
-        return partial_id
-
-    sources = await client.sources.list(notebook_id)
-    matches = [src for src in sources
-               if src.id.lower().startswith(partial_id.lower())]
-
-    if len(matches) == 1:
-        if matches[0].id != partial_id:
-            console.print(f"[dim]Matched: {matches[0].id[:12]}... ({matches[0].title})[/dim]")
-        return matches[0].id
-    elif len(matches) == 0:
-        raise click.ClickException(
-            f"No source found starting with '{partial_id}'. "
-            "Run 'notebooklm source list' to see available sources."
-        )
-    else:
-        lines = [f"Ambiguous ID '{partial_id}' matches {len(matches)} sources:"]
-        for src in matches[:5]:
-            lines.append(f"  {src.id[:12]}... {src.title}")
-        if len(matches) > 5:
-            lines.append(f"  ... and {len(matches) - 5} more")
-        lines.append("\nSpecify more characters to narrow down.")
-        raise click.ClickException("\n".join(lines))
+    """Resolve partial source ID to full ID."""
+    return await _resolve_partial_id(
+        partial_id,
+        list_fn=lambda: client.sources.list(notebook_id),
+        entity_name="source",
+        list_command="source list",
+    )
 
 
 async def resolve_artifact_id(client, notebook_id: str, partial_id: str) -> str:
-    """Resolve partial artifact ID to full ID.
-
-    Allows users to type partial IDs like 'abc' instead of full UUIDs.
-    Matches are case-insensitive prefix matches.
-
-    Args:
-        client: NotebookLMClient instance (inside async context)
-        notebook_id: Full notebook ID
-        partial_id: Full or partial artifact ID
-
-    Returns:
-        Full artifact ID
-
-    Raises:
-        click.ClickException: If no match or ambiguous match
-    """
-    import click
-
-    if not partial_id:
-        return partial_id
-
-    # Skip resolution for IDs that look complete (20+ chars)
-    if len(partial_id) >= 20:
-        return partial_id
-
-    artifacts = await client.artifacts.list(notebook_id)
-    matches = [art for art in artifacts
-               if art.id.lower().startswith(partial_id.lower())]
-
-    if len(matches) == 1:
-        if matches[0].id != partial_id:
-            console.print(f"[dim]Matched: {matches[0].id[:12]}... ({matches[0].title})[/dim]")
-        return matches[0].id
-    elif len(matches) == 0:
-        raise click.ClickException(
-            f"No artifact found starting with '{partial_id}'. "
-            "Run 'notebooklm artifact list' to see available artifacts."
-        )
-    else:
-        lines = [f"Ambiguous ID '{partial_id}' matches {len(matches)} artifacts:"]
-        for art in matches[:5]:
-            lines.append(f"  {art.id[:12]}... {art.title}")
-        if len(matches) > 5:
-            lines.append(f"  ... and {len(matches) - 5} more")
-        lines.append("\nSpecify more characters to narrow down.")
-        raise click.ClickException("\n".join(lines))
+    """Resolve partial artifact ID to full ID."""
+    return await _resolve_partial_id(
+        partial_id,
+        list_fn=lambda: client.artifacts.list(notebook_id),
+        entity_name="artifact",
+        list_command="artifact list",
+    )
 
 
 # =============================================================================
