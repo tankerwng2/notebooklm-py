@@ -188,7 +188,7 @@ Artifact downloads (audio, video, images) require Playwright because:
 
 **Solution:** Ensure browser support is installed:
 ```bash
-pip install "notebooklm-client[browser]"
+pip install "notebooklm-py[browser]"
 playwright install chromium
 ```
 
@@ -301,7 +301,7 @@ async with httpx.AsyncClient() as client:
 ## Getting Help
 
 1. Check this troubleshooting guide
-2. Search [existing issues](https://github.com/user/notebooklm-client/issues)
+2. Search [existing issues](https://github.com/teng-lin/notebooklm-py/issues)
 3. Open a new issue with:
    - Command/code that failed
    - Full error message

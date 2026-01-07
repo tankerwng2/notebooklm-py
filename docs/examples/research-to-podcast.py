@@ -8,7 +8,7 @@ This script demonstrates:
 4. Generate a podcast from the research
 
 Prerequisites:
-    pip install "notebooklm-client[browser]"
+    pip install "notebooklm-py[browser]"
     notebooklm login
 
 Usage:

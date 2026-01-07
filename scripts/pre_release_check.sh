@@ -1,5 +1,5 @@
 #!/bin/bash
-# Pre-release checks for notebooklm-client
+# Pre-release checks for notebooklm-py
 set -e
 
 echo "🔍 Running pre-release checks..."

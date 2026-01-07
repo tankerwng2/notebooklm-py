@@ -8,7 +8,7 @@ This script demonstrates:
 4. Report import status
 
 Prerequisites:
-    pip install "notebooklm-client[browser]"
+    pip install "notebooklm-py[browser]"
     notebooklm login
 
 Usage:

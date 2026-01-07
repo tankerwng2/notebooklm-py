@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Quickstart example for notebooklm-client.
+"""Quickstart example for notebooklm-py.
 
 This script demonstrates a complete workflow:
 1. Create a notebook
@@ -9,7 +9,7 @@ This script demonstrates a complete workflow:
 5. Download the result
 
 Prerequisites:
-    pip install "notebooklm-client[browser]"
+    pip install "notebooklm-py[browser]"
     playwright install chromium
     notebooklm login  # Authenticate first
 

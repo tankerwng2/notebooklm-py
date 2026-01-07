@@ -50,7 +50,7 @@ On failure, offer user a choice:
 
 Benefits:
 - Single source of truth (skill versioned with CLI)
-- Easy installation: `pip install notebooklm-client && notebooklm skill install`
+- Easy installation: `pip install notebooklm-py && notebooklm skill install`
 - Automatic upgrade detection
 
 ## Implementation
@@ -87,7 +87,7 @@ The skill includes:
 ### Installation Flow
 
 ```bash
-pip install notebooklm-client
+pip install notebooklm-py
 notebooklm login              # Authenticate first
 notebooklm skill install      # One command to enable skill
 ```
