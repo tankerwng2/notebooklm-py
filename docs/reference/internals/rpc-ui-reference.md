@@ -1,0 +1,818 @@
+# RPC & UI Reference
+
+**Status:** Active
+**Last Updated:** 2026-01-07
+**Source of Truth:** `src/notebooklm/rpc/types.py`
+**Purpose:** Complete reference for RPC methods, UI selectors, and payload structures
+
+> **Note:** Payload structures extracted from actual implementation in `src/notebooklm/`.
+> Each payload includes a reference to its source file.
+
+---
+
+## Quick Reference
+
+### RPC Method Status
+
+| RPC ID | Method | Purpose | Implementation |
+|--------|--------|---------|----------------|
+| `wXbhsf` | LIST_NOTEBOOKS | List all notebooks | `_notebooks.py` |
+| `CCqFvf` | CREATE_NOTEBOOK | Create new notebook | `_notebooks.py` |
+| `rLM1Ne` | GET_NOTEBOOK | Get notebook details + sources | `_notebooks.py` |
+| `s0tc2d` | RENAME_NOTEBOOK | Rename + configure chat settings | `_notebooks.py`, `_chat.py` |
+| `WWINqb` | DELETE_NOTEBOOK | Delete a notebook | `_notebooks.py` |
+| `izAoDd` | ADD_SOURCE | Add URL/text/YouTube source | `_sources.py` |
+| `o4cbdc` | ADD_SOURCE_FILE | Register uploaded file | `_sources.py` |
+| `tGMBJ` | DELETE_SOURCE | Delete a source | `_sources.py` |
+| `b7Wfje` | UPDATE_SOURCE | Rename source | `_sources.py` |
+| `tr032e` | GET_SOURCE_GUIDE | Get source summary | `_sources.py` |
+| `R7cb6c` | CREATE_VIDEO | Unified artifact generation | `_artifacts.py` |
+| `gArtLc` | LIST_ARTIFACTS | List/poll artifacts | `_artifacts.py` |
+| `V5N4be` | DELETE_STUDIO | Delete studio artifact | `_artifacts.py` |
+| `hPTbtc` | GET_CONVERSATION_HISTORY | Get chat history | `_chat.py` |
+| `CYK0Xb` | CREATE_NOTE | Create a note (placeholder) | `_notes.py` |
+| `cYAfTb` | UPDATE_NOTE | Update note content/title | `_notes.py` |
+| `AH0mwd` | DELETE_NOTE | Delete a note | `_notes.py` |
+| `cFji9` | GET_NOTES | List notes and mind maps | `_notes.py` |
+| `yyryJe` | ACT_ON_SOURCES | Mind map generation | `_artifacts.py` |
+
+### Content Type Codes (StudioContentType)
+
+| Code | Type | Used By |
+|------|------|---------|
+| 1 | Audio | Audio Overview |
+| 2 | Report | Briefing Doc, Study Guide, Blog Post |
+| 3 | Video | Video Overview |
+| 4 | Quiz/Flashcards | Quiz (variant=2), Flashcards (variant=1) |
+| 5 | Mind Map | Mind Map |
+| 7 | Infographic | Infographic |
+| 8 | Slide Deck | Slide Deck |
+| 9 | Data Table | Data Table |
+
+---
+
+## Using Selector Lists
+
+Selectors are provided as Python lists of **fallback options**. Try each in order:
+
+```python
+async def try_selectors(page, selectors: list[str], action="click", timeout=5000):
+    """Try multiple selectors until one works."""
+    for selector in selectors:
+        try:
+            element = page.locator(selector)
+            if action == "click":
+                await element.click(timeout=timeout)
+            elif action == "fill":
+                return element
+            return True
+        except Exception:
+            continue
+    raise Exception(f"None of the selectors worked: {selectors}")
+
+# Example usage
+await try_selectors(page, HOME_SELECTORS["create_notebook"])
+```
+
+---
+
+## Home / Notebook List
+
+### UI Selectors
+
+```python
+HOME_SELECTORS = {
+    "create_notebook": [
+        "button:has-text('Create new')",
+        "mat-card[role='button']:has-text('Create new notebook')",
+    ],
+    "notebook_card": [
+        "mat-card:has(button:has-text('more_vert'))",
+        "mat-card[role='button']:has(h3)",
+    ],
+    "notebook_menu": [
+        "button[aria-label*='More options']",
+    ],
+}
+```
+
+### RPC: LIST_NOTEBOOKS (wXbhsf)
+
+**Source:** `_notebooks.py::list()`
+
+```python
+params = [
+    None,   # 0
+    1,      # 1: Fixed value
+    None,   # 2
+    [2],    # 3: Fixed flag
+]
+```
+
+### RPC: CREATE_NOTEBOOK (CCqFvf)
+
+**Source:** `_notebooks.py::create()`
+
+```python
+params = [
+    title,  # 0: Notebook title
+    None,   # 1
+    None,   # 2
+    [2],    # 3: Fixed flag
+    [1],    # 4: Fixed flag
+]
+```
+
+### RPC: DELETE_NOTEBOOK (WWINqb)
+
+**Source:** `_notebooks.py::delete()`
+
+```python
+params = [
+    [notebook_id],  # 0: Single-nested notebook ID
+    [2],            # 1: Fixed flag
+]
+```
+
+### RPC: GET_NOTEBOOK (rLM1Ne)
+
+**Source:** `_notebooks.py::get()`
+
+```python
+params = [
+    notebook_id,  # 0
+    None,         # 1
+    [2],          # 2: Fixed flag
+    None,         # 3
+    0,            # 4: Fixed value
+]
+```
+
+---
+
+## Sources Panel
+
+### UI Selectors
+
+```python
+SOURCES_SELECTORS = {
+    "add_sources": [
+        "button:has-text('+ Add sources')",
+        "button:has-text('Add sources')",
+    ],
+    "source_card": ".single-source-container",
+    "source_menu": "button[aria-label*='More options']",
+    "remove_source": "button:has-text('Remove source')",
+    "rename_source": "button:has-text('Rename source')",
+}
+
+ADD_SOURCE_MODAL = {
+    "modal": "[role='dialog']",
+    "website_tab": "button:has-text('Website')",
+    "url_input": "textarea[placeholder*='links']",
+    "copied_text_tab": "button:has-text('Copied text')",
+    "submit_button": "button:has-text('Insert')",
+}
+```
+
+### RPC: ADD_SOURCE (izAoDd) - URL
+
+**Source:** `_sources.py::_add_url_source()`
+
+```python
+# URL goes at position [2] in an 8-element array
+params = [
+    [[None, None, [url], None, None, None, None, None]],  # 0: Source config
+    notebook_id,                                           # 1: Notebook ID
+    [2],                                                   # 2: Source type flag
+    None,                                                  # 3
+    None,                                                  # 4
+]
+```
+
+### RPC: ADD_SOURCE (izAoDd) - Text
+
+**Source:** `_sources.py::add_text()`
+
+```python
+# [title, content] at position [1] in an 8-element array
+params = [
+    [[None, [title, content], None, None, None, None, None, None]],  # 0
+    notebook_id,                                                      # 1
+    [2],                                                              # 2
+    None,                                                             # 3
+    None,                                                             # 4
+]
+```
+
+### RPC: ADD_SOURCE (izAoDd) - YouTube
+
+**Source:** `_sources.py::_add_youtube_source()`
+
+```python
+# YouTube URL at position [7] in an 11-element array (different from regular URL!)
+params = [
+    [[None, None, None, None, None, None, None, [url], None, None, 1]],  # 0
+    notebook_id,                                                          # 1
+    [2],                                                                  # 2
+    [1, None, None, None, None, None, None, None, None, None, [1]],      # 3: Extra config
+]
+```
+
+### RPC: DELETE_SOURCE (tGMBJ)
+
+**Source:** `_sources.py::delete()`
+
+**IMPORTANT:** `notebook_id` is passed via `source_path`, NOT in params!
+
+```python
+params = [[[source_id]]]  # Triple-nested!
+
+# Called with:
+await rpc_call(
+    RPCMethod.DELETE_SOURCE,
+    params,
+    source_path=f"/notebook/{notebook_id}",  # <-- notebook_id here
+)
+```
+
+### RPC: UPDATE_SOURCE / Rename (b7Wfje)
+
+**Source:** `_sources.py::rename()`
+
+```python
+# Different structure: None at [0], source_id at [1], title triple-nested at [2]
+params = [
+    None,               # 0
+    [source_id],        # 1: Single-nested source ID
+    [[[new_title]]],    # 2: Triple-nested title
+]
+```
+
+### RPC: GET_SOURCE_GUIDE (tr032e)
+
+**Source:** `_sources.py::get_guide()`
+
+```python
+# Quadruple-nested source ID!
+params = [[[[source_id]]]]
+```
+
+---
+
+## Chat Panel
+
+### UI Selectors
+
+```python
+CHAT_SELECTORS = {
+    "message_input": [
+        "textarea[placeholder='Start typing...']",
+        "textarea[aria-label='Query box']",
+    ],
+    "send_button": "button[aria-label='Submit']",
+    "configure_button": "button[aria-label='Configure notebook']",
+    "chat_history": "[role='log']",
+    "message_bubble": [
+        ".to-user-container",      # AI messages
+        ".from-user-container",    # User messages
+    ],
+}
+
+CHAT_CONFIG = {
+    "modal": "configure-notebook-settings",
+    "goal_default": "button[aria-label='Default button']",
+    "goal_learning_guide": "button[aria-label*='Learning Guide']",
+    "goal_custom": "button[aria-label='Custom button']",
+    "length_shorter": "button[aria-label*='Shorter']",
+    "length_longer": "button[aria-label*='Longer']",
+    "save_button": "button:has-text('Save')",
+}
+```
+
+### Query Endpoint (Streaming)
+
+Chat queries use a **separate streaming endpoint**, not batchexecute:
+
+```
+POST /_/LabsTailwindUi/data/google.internal.labs.tailwind.orchestration.v1.LabsTailwindOrchestrationService/GenerateFreeFormStreamed
+```
+
+### RPC: RENAME_NOTEBOOK (s0tc2d) - Rename Only
+
+**Source:** `_notebooks.py::rename()`
+
+```python
+# Just rename, no chat config
+params = [
+    notebook_id,                                    # 0
+    [[None, None, None, [None, new_title]]],        # 1: Nested title at [[[3][1]]]
+]
+```
+
+### RPC: RENAME_NOTEBOOK (s0tc2d) - Configure Chat
+
+**Source:** `_chat.py::configure()`
+
+```python
+# Chat goal codes (ChatGoal enum)
+CHAT_GOAL_DEFAULT = 1
+CHAT_GOAL_CUSTOM = 2
+CHAT_GOAL_LEARNING_GUIDE = 3
+
+# Response length codes (ChatResponseLength enum)
+CHAT_LENGTH_DEFAULT = 1
+CHAT_LENGTH_LONGER = 4
+CHAT_LENGTH_SHORTER = 5
+
+# Build goal array
+goal_array = [goal_value]                    # e.g., [1] for DEFAULT
+# For CUSTOM: goal_array = [2, custom_prompt]
+
+chat_settings = [goal_array, [response_length_value]]
+
+params = [
+    notebook_id,                                              # 0
+    [[None, None, None, None, None, None, None, chat_settings]],  # 1: Settings at [[[7]]]
+]
+```
+
+### RPC: GET_CONVERSATION_HISTORY (hPTbtc)
+
+**Source:** `_chat.py::get_history()`
+
+```python
+params = [
+    [],           # 0: Empty sources array
+    None,         # 1
+    notebook_id,  # 2
+    limit,        # 3: Max conversations (e.g., 20)
+]
+```
+
+---
+
+## Studio Panel - Artifact Generation
+
+### UI Selectors
+
+```python
+STUDIO_SELECTORS = {
+    "artifact_button": ".create-artifact-button-container",
+    "customize_icon": ".option-icon",  # Click THIS for customization!
+    "add_note": "button:has-text('Add note')",
+    "artifact_list": ".artifact-library-container",
+    "artifact_row": ".artifact-item-button",
+    "artifact_menu": ".artifact-more-button",
+}
+
+ARTIFACT_MENU = {
+    "rename": "button:has-text('Rename')",
+    "download": "button:has-text('Download')",
+    "delete": "button:has-text('Delete')",
+}
+```
+
+### Critical: Edit Icon vs Full Button
+
+```python
+# ✅ Click edit icon for customization dialog
+await page.locator(".create-artifact-button-container:has-text('Audio') .option-icon").click()
+
+# ❌ Clicking full button starts generation with defaults (skips customization!)
+await page.locator(".create-artifact-button-container:has-text('Audio')").click()
+```
+
+### RPC: CREATE_VIDEO / Unified Artifact (R7cb6c)
+
+**All artifact types use `R7cb6c` with different content type codes and nested configs.**
+
+**Source:** `_artifacts.py`
+
+#### Audio Overview (Type 1)
+
+**Source:** `_artifacts.py::generate_audio()`
+
+```python
+source_ids_triple = [[[sid]] for sid in source_ids]  # [[[s1]], [[s2]], ...]
+source_ids_double = [[sid] for sid in source_ids]    # [[s1], [s2], ...]
+
+params = [
+    [2],                              # 0: Fixed
+    notebook_id,                      # 1
+    [
+        None,                         # [0]
+        None,                         # [1]
+        1,                            # [2]: StudioContentType.AUDIO
+        source_ids_triple,            # [3]
+        None,                         # [4]
+        None,                         # [5]
+        [
+            None,
+            [
+                instructions,         # Focus/instructions text
+                length_code,          # 1=SHORT, 2=DEFAULT, 3=LONG
+                None,
+                source_ids_double,
+                language,             # "en"
+                None,
+                format_code,          # 1=DEEP_DIVE, 2=BRIEF, 3=CRITIQUE, 4=DEBATE
+            ],
+        ],                            # [6]
+    ],                                # 2: Source config
+]
+```
+
+#### Video Overview (Type 3)
+
+**Source:** `_artifacts.py::generate_video()`
+
+```python
+params = [
+    [2],
+    notebook_id,
+    [
+        None,                         # [0]
+        None,                         # [1]
+        3,                            # [2]: StudioContentType.VIDEO
+        source_ids_triple,            # [3]
+        None,                         # [4]
+        None,                         # [5]
+        None,                         # [6]
+        None,                         # [7]
+        [
+            None,
+            None,
+            [
+                source_ids_double,
+                language,             # "en"
+                instructions,
+                None,
+                format_code,          # 1=EXPLAINER, 2=BRIEF
+                style_code,           # 1=AUTO, 2=CUSTOM, 3=CLASSIC, 4=WHITEBOARD, etc.
+            ],
+        ],                            # [8]
+    ],
+]
+```
+
+#### Report (Type 2)
+
+**Source:** `_artifacts.py::generate_report()`
+
+```python
+params = [
+    [2],
+    notebook_id,
+    [
+        None,                         # [0]
+        None,                         # [1]
+        2,                            # [2]: StudioContentType.REPORT
+        source_ids_triple,            # [3]
+        None,                         # [4]
+        None,                         # [5]
+        None,                         # [6]
+        [
+            None,
+            [
+                title,                # "Briefing Doc" / "Study Guide" / etc.
+                description,          # Short description
+                None,
+                source_ids_double,
+                language,             # "en"
+                prompt,               # Detailed generation prompt
+                None,
+                True,
+            ],
+        ],                            # [7]
+    ],
+]
+```
+
+#### Quiz (Type 4, Variant 2)
+
+**Source:** `_artifacts.py::generate_quiz()`
+
+```python
+params = [
+    [2],
+    notebook_id,
+    [
+        None,                         # [0]
+        None,                         # [1]
+        4,                            # [2]: StudioContentType.QUIZ_FLASHCARD
+        source_ids_triple,            # [3]
+        None,                         # [4]
+        None,                         # [5]
+        None,                         # [6]
+        None,                         # [7]
+        None,                         # [8]
+        [
+            None,
+            [
+                2,                    # Variant: 2=quiz, 1=flashcards
+                None,
+                instructions,
+                None,
+                None,
+                None,
+                None,
+                [quantity_code, difficulty_code],  # quantity: 1=FEWER, 2=STANDARD
+            ],                                     # difficulty: 1=EASY, 2=MEDIUM, 3=HARD
+        ],                            # [9]
+    ],
+]
+```
+
+#### Flashcards (Type 4, Variant 1)
+
+**Source:** `_artifacts.py::generate_flashcards()`
+
+```python
+params = [
+    [2],
+    notebook_id,
+    [
+        None,                         # [0]
+        None,                         # [1]
+        4,                            # [2]: StudioContentType.QUIZ_FLASHCARD
+        source_ids_triple,            # [3]
+        None,                         # [4]
+        None,                         # [5]
+        None,                         # [6]
+        None,                         # [7]
+        None,                         # [8]
+        [
+            None,
+            [
+                1,                    # Variant: 1=flashcards (vs 2=quiz)
+                None,
+                instructions,
+                None,
+                None,
+                None,
+                [difficulty_code, quantity_code],  # Note: reversed order from quiz!
+            ],
+        ],                            # [9]
+    ],
+]
+```
+
+#### Infographic (Type 7)
+
+**Source:** `_artifacts.py::generate_infographic()`
+
+```python
+# Orientation: 1=LANDSCAPE, 2=PORTRAIT, 3=SQUARE
+# Detail: 1=CONCISE, 2=STANDARD, 3=DETAILED
+
+params = [
+    [2],
+    notebook_id,
+    [
+        None,                         # [0]
+        None,                         # [1]
+        7,                            # [2]: StudioContentType.INFOGRAPHIC
+        source_ids_triple,            # [3]
+        None, None, None, None, None, None, None, None, None, None,  # [4-13]
+        [
+            None,
+            [instructions, language, None, orientation_code, detail_code],
+        ],                            # [14]
+    ],
+]
+```
+
+#### Slide Deck (Type 8)
+
+**Source:** `_artifacts.py::generate_slide_deck()`
+
+```python
+# Format: 1=DETAILED_DECK, 2=PRESENTER_SLIDES
+# Length: 1=DEFAULT, 2=SHORT
+
+params = [
+    [2],
+    notebook_id,
+    [
+        None,                         # [0]
+        None,                         # [1]
+        8,                            # [2]: StudioContentType.SLIDE_DECK
+        source_ids_triple,            # [3]
+        None, None, None, None, None, None, None, None, None, None, None, None,  # [4-15]
+        [[instructions, language, format_code, length_code]],  # [16]
+    ],
+]
+```
+
+#### Data Table (Type 9)
+
+**Source:** `_artifacts.py::generate_data_table()`
+
+```python
+params = [
+    [2],
+    notebook_id,
+    [
+        None,                         # [0]
+        None,                         # [1]
+        9,                            # [2]: StudioContentType.DATA_TABLE
+        source_ids_triple,            # [3]
+        None, None, None, None, None, None, None, None, None, None, None, None, None, None,  # [4-17]
+        [None, [instructions, language]],  # [18]
+    ],
+]
+```
+
+#### Mind Map (Type 5) - Uses ACT_ON_SOURCES (yyryJe)
+
+**Source:** `_artifacts.py::generate_mind_map()`
+
+**Note:** Mind map uses a different RPC method than other artifacts.
+
+```python
+# RPC: ACT_ON_SOURCES (yyryJe), NOT CREATE_VIDEO
+params = [
+    source_ids_nested,                            # 0: [[[sid]] for sid in source_ids]
+    None,                                         # 1
+    None,                                         # 2
+    None,                                         # 3
+    None,                                         # 4
+    ["interactive_mindmap", [["[CONTEXT]", ""]], ""],  # 5: Mind map command
+    None,                                         # 6
+    [2, None, [1]],                               # 7: Fixed config
+]
+```
+
+### RPC: LIST_ARTIFACTS / POLL_STUDIO (gArtLc)
+
+**Source:** `_artifacts.py::list()`
+
+```python
+params = [
+    [2],
+    notebook_id,
+    'NOT artifact.status = "ARTIFACT_STATUS_SUGGESTED"',  # Filter string
+]
+
+# Response contains artifacts array with status:
+# status = 1 → Processing
+# status = 2 → Pending
+# status = 3 → Completed
+```
+
+---
+
+## Notes
+
+### RPC: CREATE_NOTE (CYK0Xb)
+
+**Source:** `_notes.py::create()`
+
+**Note:** Google ignores title/content in CREATE_NOTE. Must call UPDATE_NOTE after to set actual content.
+
+```python
+# Creates note with fixed placeholder values
+params = [
+    notebook_id,   # 0
+    "",            # 1: Empty string (ignored)
+    [1],           # 2: Fixed flag
+    None,          # 3
+    "New Note",    # 4: Placeholder title (ignored)
+]
+# Then call UPDATE_NOTE to set real title/content
+```
+
+### RPC: UPDATE_NOTE (cYAfTb)
+
+**Source:** `_notes.py::update()`
+
+```python
+params = [
+    notebook_id,                       # 0
+    note_id,                           # 1
+    [[[content, title, [], 0]]],       # 2: Triple-nested [content, title, [], 0]
+]
+```
+
+### RPC: DELETE_NOTE (AH0mwd)
+
+**Source:** `_notes.py::delete()`
+
+```python
+params = [
+    notebook_id,   # 0
+    None,          # 1
+    [note_id],     # 2: Single-nested note ID
+]
+```
+
+### RPC: GET_NOTES (cFji9)
+
+**Source:** `_notes.py::_get_all_notes_and_mind_maps()`
+
+```python
+params = [notebook_id]
+```
+
+---
+
+## Source ID Nesting Patterns
+
+**CRITICAL:** Source IDs require different nesting levels depending on the method.
+
+| Pattern | Structure | Used By |
+|---------|-----------|---------|
+| Single | `[source_id]` | UPDATE_SOURCE position [1] |
+| Double | `[[source_id]]` | Artifact source_ids_double |
+| Triple | `[[[source_id]]]` | DELETE_SOURCE, Artifact source_ids_triple |
+| Quadruple | `[[[[source_id]]]]` | GET_SOURCE_GUIDE |
+| Array of Double | `[[s1], [s2], ...]` | Artifact generation |
+| Array of Triple | `[[[s1]], [[s2]], ...]` | Artifact generation |
+
+**Building nesting in Python:**
+
+```python
+source_ids = ["source_1", "source_2", "source_3"]
+
+# Single: [source_id]
+single = [source_ids[0]]
+
+# Double: [[source_id]]
+double = [[source_ids[0]]]
+
+# Triple: [[[source_id]]]
+triple = [[[source_ids[0]]]]
+
+# Array of Double for artifacts
+source_ids_double = [[sid] for sid in source_ids]
+# Result: [["source_1"], ["source_2"], ["source_3"]]
+
+# Array of Triple for artifacts
+source_ids_triple = [[[sid]] for sid in source_ids]
+# Result: [[["source_1"]], [["source_2"]], [["source_3"]]]
+```
+
+---
+
+## Other RPC Methods (Not Fully Documented)
+
+These methods exist in `rpc/types.py` but don't have complete payload documentation yet:
+
+| RPC ID | Method | Purpose | Status |
+|--------|--------|---------|--------|
+| `VfAZjd` | SUMMARIZE | Get notebook summary | Used by `_notebooks.py::get_summary()` |
+| `FLmJqe` | REFRESH_SOURCE | Refresh URL/Drive source | Used by `_sources.py::refresh()` |
+| `yR9Yof` | CHECK_SOURCE_FRESHNESS | Check if source needs refresh | Used by `_sources.py::check_freshness()` |
+| `ciyUvf` | GET_SUGGESTED_REPORTS | Get AI-suggested report formats | Partially implemented |
+| `Ljjv0c` | START_FAST_RESEARCH | Start fast research | In `_research.py` |
+| `QA9ei` | START_DEEP_RESEARCH | Start deep research | In `_research.py` |
+| `e3bVqc` | POLL_RESEARCH | Poll research status | In `_research.py` |
+| `LBwxtb` | IMPORT_RESEARCH | Import research results | In `_research.py` |
+| `rc3d8d` | RENAME_ARTIFACT | Rename artifact | In `_artifacts.py` |
+| `DJezBc` | UPDATE_ARTIFACT | Update artifact | In `_artifacts.py` |
+| `WxBZtb` | DELETE_ARTIFACT | Delete artifact | In `_artifacts.py` |
+| `Krh3pd` | EXPORT_ARTIFACT | Export to Docs/Sheets | In `_artifacts.py` |
+| `RGP97b` | SHARE_AUDIO | Share audio artifact | Not implemented |
+| `QDyure` | SHARE_PROJECT | Share notebook | Not implemented |
+| `nS9Qlc` | LIST_FEATURED_PROJECTS | List featured notebooks | Not implemented |
+| `YJBpHc` | GET_GUIDEBOOKS | Get guidebooks | Not implemented |
+
+---
+
+## Operation Timing Categories
+
+### Quick Operations
+
+Most operations complete nearly instantly:
+- Notebook operations: list, create, rename, delete
+- Source metadata: list, rename, delete
+- Note operations: create, update, delete
+- Chat configuration
+- Artifact listing
+
+### Processing Operations
+
+These require backend processing - wait for completion:
+- **Add source (URL)**: Network fetch + text extraction
+- **Add source (file)**: Upload + parsing
+- **Add source (YouTube)**: Transcript extraction
+- **Mind Map generation**: Usually faster than other generation types
+
+### Generation Operations
+
+AI-generated content takes significant time:
+- **Audio Overview**: Several minutes
+- **Video Overview**: Several minutes (longer than audio)
+- **Reports/Study Guides**: 1-2 minutes
+- **Quiz/Flashcards**: 1-2 minutes
+- **Infographic/Slide Deck/Data Table**: 1-2 minutes
+
+### Long-Running Operations
+
+Some operations can run much longer:
+- **Deep Research**: Can take many minutes depending on query complexity
+
+### Implementation Note
+
+When automating, poll for completion rather than using fixed timeouts. Check artifact status or source processing state periodically.
