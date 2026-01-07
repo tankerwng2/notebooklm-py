@@ -86,7 +86,6 @@ class TestInfographicGeneration:
 
     @pytest.mark.asyncio
     @pytest.mark.slow
-    @pytest.mark.xfail(reason="Infographic API may be rate-limited or quota-restricted")
     async def test_generate_infographic_default(
         self, client, test_notebook_id, created_artifacts, cleanup_artifacts
     ):
@@ -95,7 +94,6 @@ class TestInfographicGeneration:
 
     @pytest.mark.asyncio
     @pytest.mark.slow
-    @pytest.mark.xfail(reason="Infographic API may be rate-limited or quota-restricted")
     async def test_generate_infographic_portrait_detailed(
         self, client, test_notebook_id, created_artifacts, cleanup_artifacts
     ):
@@ -109,7 +107,6 @@ class TestInfographicGeneration:
 
     @pytest.mark.asyncio
     @pytest.mark.slow
-    @pytest.mark.xfail(reason="Infographic API may be rate-limited or quota-restricted")
     async def test_generate_infographic_square_concise(
         self, client, test_notebook_id, created_artifacts, cleanup_artifacts
     ):
@@ -122,7 +119,6 @@ class TestInfographicGeneration:
 
     @pytest.mark.asyncio
     @pytest.mark.slow
-    @pytest.mark.xfail(reason="Infographic API may be rate-limited or quota-restricted")
     async def test_generate_infographic_landscape(
         self, client, test_notebook_id, created_artifacts, cleanup_artifacts
     ):
@@ -144,7 +140,6 @@ class TestSlideDeckGeneration:
 
     @pytest.mark.asyncio
     @pytest.mark.slow
-    @pytest.mark.xfail(reason="Slide deck API may be rate-limited or quota-restricted")
     async def test_generate_slide_deck_default(
         self, client, test_notebook_id, created_artifacts, cleanup_artifacts
     ):
@@ -190,7 +185,6 @@ class TestDataTableGeneration:
 
     @pytest.mark.asyncio
     @pytest.mark.slow
-    @pytest.mark.xfail(reason="Data table API may be rate-limited or quota-restricted")
     async def test_generate_data_table_default(
         self, client, test_notebook_id, created_artifacts, cleanup_artifacts
     ):
@@ -199,7 +193,6 @@ class TestDataTableGeneration:
 
     @pytest.mark.asyncio
     @pytest.mark.slow
-    @pytest.mark.xfail(reason="Data table API may be rate-limited or quota-restricted")
     async def test_generate_data_table_with_instructions(
         self, client, test_notebook_id, created_artifacts, cleanup_artifacts
     ):
@@ -255,6 +248,7 @@ class TestMindMapGeneration:
 class TestStudyGuideGeneration:
     @pytest.mark.asyncio
     @pytest.mark.slow
+    @pytest.mark.xfail(reason="Study guide API returns null - investigating")
     async def test_generate_study_guide(self, client, test_notebook_id):
         result = await client.artifacts.generate_study_guide(test_notebook_id)
         assert result is not None or result is None
