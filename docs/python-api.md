@@ -181,6 +181,12 @@ class NotebookLMClient:
 | `delete(notebook_id)` | `notebook_id: str` | `bool` | Delete a notebook |
 | `rename(notebook_id, new_title)` | `notebook_id: str, new_title: str` | `Notebook` | Rename a notebook |
 | `get_description(notebook_id)` | `notebook_id: str` | `NotebookDescription` | Get AI summary and topics |
+| `get_summary(notebook_id)` | `notebook_id: str` | `str` | Get raw summary text |
+| `share(notebook_id, settings=None)` | `notebook_id: str, settings: dict` | `Any` | Share notebook with settings |
+| `get_analytics(notebook_id)` | `notebook_id: str` | `Any` | Get notebook analytics/metadata |
+| `list_featured(page_size=10, page_token=None)` | `page_size: int, page_token: str` | `Any` | List featured/public notebooks |
+| `remove_from_recent(notebook_id)` | `notebook_id: str` | `None` | Remove from recently viewed |
+| `get_raw(notebook_id)` | `notebook_id: str` | `Any` | Get raw API response data |
 
 **Example:**
 ```python
@@ -193,12 +199,29 @@ for nb in notebooks:
 nb = await client.notebooks.create("Draft")
 nb = await client.notebooks.rename(nb.id, "Final Version")
 
-# Get AI-generated description
+# Get AI-generated description (parsed with suggested topics)
 desc = await client.notebooks.get_description(nb.id)
 print(desc.summary)
 for topic in desc.suggested_topics:
-    print(f"  - {topic.title}")
+    print(f"  - {topic.question}")
+
+# Get raw summary text (unparsed)
+summary = await client.notebooks.get_summary(nb.id)
+print(summary)
+
+# Share a notebook
+await client.notebooks.share(nb.id, settings={"public": True})
+
+# Get analytics for a notebook
+analytics = await client.notebooks.get_analytics(nb.id)
+
+# Browse featured/public notebooks
+featured = await client.notebooks.list_featured(page_size=20)
 ```
+
+**get_summary vs get_description:**
+- `get_summary()` returns the raw summary text string
+- `get_description()` returns a `NotebookDescription` object with the parsed summary and a list of `SuggestedTopic` objects for suggested questions
 
 ---
 
@@ -238,23 +261,118 @@ await client.sources.refresh(nb_id, src.id)  # Re-fetch URL content
 
 ### ArtifactsAPI (`client.artifacts`)
 
+#### Core Methods
+
 | Method | Parameters | Returns | Description |
 |--------|------------|---------|-------------|
-| `list(notebook_id, type=None)` | `str, StudioContentType` | `list[Artifact]` | List artifacts |
+| `list(notebook_id, type=None)` | `str, int` | `list[Artifact]` | List artifacts |
 | `get(notebook_id, artifact_id)` | `str, str` | `Artifact` | Get artifact details |
 | `delete(notebook_id, artifact_id)` | `str, str` | `bool` | Delete artifact |
-| `rename(artifact_id, new_title)` | `str, str` | `bool` | Rename artifact |
-| `poll_status(notebook_id, task_id)` | `str, str` | `ArtifactStatus` | Check generation status |
-| `wait_for_completion(notebook_id, task_id, ...)` | `str, str, ...` | `ArtifactStatus` | Wait for generation |
+| `rename(notebook_id, artifact_id, new_title)` | `str, str, str` | `None` | Rename artifact |
+| `poll_status(notebook_id, task_id)` | `str, str` | `GenerationStatus` | Check generation status |
+| `wait_for_completion(notebook_id, task_id, ...)` | `str, str, ...` | `GenerationStatus` | Wait for generation |
+
+#### Type-Specific List Methods
+
+| Method | Parameters | Returns | Description |
+|--------|------------|---------|-------------|
+| `list_audio(notebook_id)` | `str` | `list[Artifact]` | List audio overview artifacts |
+| `list_video(notebook_id)` | `str` | `list[Artifact]` | List video overview artifacts |
+| `list_reports(notebook_id)` | `str` | `list[Artifact]` | List report artifacts (Briefing Doc, Study Guide, Blog Post) |
+| `list_quizzes(notebook_id)` | `str` | `list[Artifact]` | List quiz artifacts |
+| `list_flashcards(notebook_id)` | `str` | `list[Artifact]` | List flashcard artifacts |
+| `list_infographics(notebook_id)` | `str` | `list[Artifact]` | List infographic artifacts |
+| `list_slide_decks(notebook_id)` | `str` | `list[Artifact]` | List slide deck artifacts |
+| `list_data_tables(notebook_id)` | `str` | `list[Artifact]` | List data table artifacts |
+
+#### Generation Methods
+
+| Method | Parameters | Returns | Description |
+|--------|------------|---------|-------------|
 | `generate_audio(...)` | See below | `GenerationStatus` | Generate podcast |
 | `generate_video(...)` | See below | `GenerationStatus` | Generate video |
 | `generate_report(...)` | See below | `GenerationStatus` | Generate report |
 | `generate_quiz(...)` | See below | `GenerationStatus` | Generate quiz |
 | `generate_flashcards(...)` | See below | `GenerationStatus` | Generate flashcards |
-| `generate_slides(...)` | See below | `GenerationStatus` | Generate slide deck |
+| `generate_slide_deck(...)` | See below | `GenerationStatus` | Generate slide deck |
 | `generate_infographic(...)` | See below | `GenerationStatus` | Generate infographic |
 | `generate_data_table(...)` | See below | `GenerationStatus` | Generate data table |
-| `generate_mind_map(...)` | See below | `GenerationStatus` | Generate mind map |
+| `generate_mind_map(...)` | See below | `dict` | Generate mind map |
+
+#### Downloading Artifacts
+
+| Method | Parameters | Returns | Description |
+|--------|------------|---------|-------------|
+| `download_audio(notebook_id, output_path, artifact_id=None)` | `str, str, str` | `str` | Download audio to file (MP4/MP3) |
+| `download_video(notebook_id, output_path, artifact_id=None)` | `str, str, str` | `str` | Download video to file (MP4) |
+| `download_infographic(notebook_id, output_path, artifact_id=None)` | `str, str, str` | `str` | Download infographic to file (PNG) |
+| `download_slide_deck(notebook_id, output_dir, artifact_id=None)` | `str, str, str` | `list[str]` | Download slides to directory (PNGs) |
+
+**Download Methods:**
+
+```python
+# Download the most recent completed audio overview
+path = await client.artifacts.download_audio(nb_id, "podcast.mp4")
+
+# Download a specific audio artifact by ID
+path = await client.artifacts.download_audio(nb_id, "podcast.mp4", artifact_id="abc123")
+
+# Download video overview
+path = await client.artifacts.download_video(nb_id, "video.mp4")
+
+# Download infographic
+path = await client.artifacts.download_infographic(nb_id, "infographic.png")
+
+# Download slide deck (creates multiple files)
+slide_paths = await client.artifacts.download_slide_deck(nb_id, "./slides/")
+# Returns: ["./slides/slide_001.png", "./slides/slide_002.png", ...]
+```
+
+**Notes:**
+- If `artifact_id` is not specified, downloads the first completed artifact of that type
+- Raises `ValueError` if no completed artifact is found
+- `download_slide_deck` creates the output directory if it doesn't exist
+- Some URLs require browser-based download (handled automatically)
+
+#### Export Methods
+
+Export artifacts to Google Docs or Google Sheets.
+
+| Method | Parameters | Returns | Description |
+|--------|------------|---------|-------------|
+| `export_report(notebook_id, artifact_id, title="Export", export_type=1)` | `str, str, str, int` | `Any` | Export report to Google Docs |
+| `export_data_table(notebook_id, artifact_id, title="Export")` | `str, str, str` | `Any` | Export data table to Google Sheets |
+| `export(notebook_id, artifact_id=None, content=None, title="Export", export_type=1)` | `str, str, str, str, int` | `Any` | Generic export to Docs/Sheets |
+
+**Export Types:**
+- `export_type=1`: Export to Google Docs
+- `export_type=2`: Export to Google Sheets
+
+```python
+# Export a report to Google Docs
+result = await client.artifacts.export_report(
+    nb_id,
+    artifact_id="report_123",
+    title="My Briefing Doc"
+)
+# result contains the Google Docs URL
+
+# Export a data table to Google Sheets
+result = await client.artifacts.export_data_table(
+    nb_id,
+    artifact_id="table_456",
+    title="Research Data"
+)
+# result contains the Google Sheets URL
+
+# Generic export (e.g., export any artifact to Docs)
+result = await client.artifacts.export(
+    nb_id,
+    artifact_id="artifact_789",
+    title="Exported Content",
+    export_type=1  # 1=Docs, 2=Sheets
+)
+```
 
 **Generation Methods:**
 
@@ -262,10 +380,10 @@ await client.sources.refresh(nb_id, src.id)  # Re-fetch URL content
 # Audio (podcast)
 status = await client.artifacts.generate_audio(
     notebook_id,
-    source_ids=None,        # List of source IDs (None = all)
-    instructions="...",     # Custom instructions
-    format=AudioFormat.DEEP_DIVE,  # DEEP_DIVE, BRIEF, CRITIQUE, DEBATE
-    length=AudioLength.DEFAULT,    # SHORT, DEFAULT, LONG
+    source_ids=None,           # List of source IDs (None = all)
+    instructions="...",        # Custom instructions
+    audio_format=AudioFormat.DEEP_DIVE,  # DEEP_DIVE, BRIEF, CRITIQUE, DEBATE
+    audio_length=AudioLength.DEFAULT,    # SHORT, DEFAULT, LONG
     language="en"
 )
 
@@ -274,8 +392,8 @@ status = await client.artifacts.generate_video(
     notebook_id,
     source_ids=None,
     instructions="...",
-    format=VideoFormat.EXPLAINER,  # EXPLAINER, BRIEF
-    style=VideoStyle.AUTO,         # AUTO, CLASSIC, WHITEBOARD, KAWAII, ANIME, etc.
+    video_format=VideoFormat.EXPLAINER,  # EXPLAINER, BRIEF
+    video_style=VideoStyle.AUTO_SELECT,  # AUTO_SELECT, CLASSIC, WHITEBOARD, KAWAII, ANIME, etc.
     language="en"
 )
 
@@ -358,27 +476,61 @@ await client.chat.configure(
 
 | Method | Parameters | Returns | Description |
 |--------|------------|---------|-------------|
-| `start_fast(notebook_id, query, source)` | `str, str, str` | `dict` | Start fast research |
-| `start_deep(notebook_id, query, source)` | `str, str, str` | `dict` | Start deep research |
-| `poll_status(notebook_id)` | `str` | `dict` | Check research status |
-| `import_sources(notebook_id, task_id, sources)` | `str, str, list` | `bool` | Import findings |
+| `start(notebook_id, query, source, mode)` | `str, str, str="web", str="fast"` | `dict` | Start research (mode: "fast" or "deep") |
+| `poll(notebook_id)` | `str` | `dict` | Check research status |
+| `import_sources(notebook_id, task_id, sources)` | `str, str, list` | `list[dict]` | Import findings |
+
+**Method Signatures:**
+
+```python
+async def start(
+    notebook_id: str,
+    query: str,
+    source: str = "web",   # "web" or "drive"
+    mode: str = "fast",    # "fast" or "deep" (deep only for web)
+) -> dict:
+    """
+    Returns: {"task_id": str, "report_id": str, "notebook_id": str, "query": str, "mode": str}
+    Raises: ValueError if source/mode combination is invalid
+    """
+
+async def poll(notebook_id: str) -> dict:
+    """
+    Returns: {"task_id": str, "status": str, "query": str, "sources": list, "summary": str}
+    Status is "completed", "in_progress", or "no_research"
+    """
+
+async def import_sources(notebook_id: str, task_id: str, sources: list[dict]) -> list[dict]:
+    """
+    sources: List of dicts with 'url' and 'title' keys
+    Returns: List of imported sources with 'id' and 'title'
+    """
+```
 
 **Example:**
 ```python
-# Start deep web research
-result = await client.research.start_deep(nb_id, "AI safety regulations", "web")
+# Start fast web research (default)
+result = await client.research.start(nb_id, "AI safety regulations")
 task_id = result["task_id"]
+
+# Start deep web research
+result = await client.research.start(nb_id, "quantum computing", source="web", mode="deep")
+task_id = result["task_id"]
+
+# Start fast Drive research
+result = await client.research.start(nb_id, "project docs", source="drive", mode="fast")
 
 # Poll until complete
 import asyncio
 while True:
-    status = await client.research.poll_status(nb_id)
+    status = await client.research.poll(nb_id)
     if status["status"] == "completed":
         break
     await asyncio.sleep(10)
 
 # Import discovered sources
-await client.research.import_sources(nb_id, task_id, status["sources"])
+imported = await client.research.import_sources(nb_id, task_id, status["sources"][:5])
+print(f"Imported {len(imported)} sources")
 ```
 
 ---
@@ -387,11 +539,43 @@ await client.research.import_sources(nb_id, task_id, status["sources"])
 
 | Method | Parameters | Returns | Description |
 |--------|------------|---------|-------------|
-| `list(notebook_id)` | `str` | `list[Note]` | List notes |
-| `create(notebook_id, content, title=None)` | `str, str, str` | `Note` | Create note |
-| `get(notebook_id, note_id)` | `str, str` | `Note` | Get note |
-| `update(notebook_id, note_id, content, title=None)` | `str, str, str, str` | `Note` | Update note |
+| `list(notebook_id)` | `str` | `list[Note]` | List text notes (excludes mind maps) |
+| `create(notebook_id, title="New Note", content="")` | `str, str, str` | `Note` | Create note |
+| `get(notebook_id, note_id)` | `str, str` | `Optional[Note]` | Get note by ID |
+| `update(notebook_id, note_id, content, title)` | `str, str, str, str` | `None` | Update note content and title |
 | `delete(notebook_id, note_id)` | `str, str` | `bool` | Delete note |
+| `list_mind_maps(notebook_id)` | `str` | `list[Any]` | List mind maps in the notebook |
+| `delete_mind_map(notebook_id, mind_map_id)` | `str, str` | `bool` | Delete a mind map |
+
+**Example:**
+```python
+# Create and manage notes
+note = await client.notes.create(nb_id, title="Meeting Notes", content="Discussion points...")
+notes = await client.notes.list(nb_id)
+
+# Update a note
+await client.notes.update(nb_id, note.id, "Updated content", "New Title")
+
+# Delete a note
+await client.notes.delete(nb_id, note.id)
+```
+
+**Mind Maps:**
+
+Mind maps are stored internally using the same structure as notes but contain JSON data with hierarchical node information. The `list()` method excludes mind maps automatically, while `list_mind_maps()` returns only mind maps.
+
+```python
+# List all mind maps in a notebook
+mind_maps = await client.notes.list_mind_maps(nb_id)
+for mm in mind_maps:
+    mm_id = mm[0]  # Mind map ID is at index 0
+    print(f"Mind map: {mm_id}")
+
+# Delete a mind map
+await client.notes.delete_mind_map(nb_id, mind_map_id)
+```
+
+**Note:** Mind maps are detected by checking if the content contains `'"children":' or `'"nodes":'` keys, which indicate JSON mind map data structure.
 
 ---
 
@@ -471,7 +655,7 @@ class VideoFormat(Enum):
     BRIEF = 2
 
 class VideoStyle(Enum):
-    AUTO = 1
+    AUTO_SELECT = 1
     CUSTOM = 2
     CLASSIC = 3
     WHITEBOARD = 4
@@ -524,8 +708,8 @@ class InfographicDetail(Enum):
 
 ```python
 class SlideDeckFormat(Enum):
-    DETAILED = 1
-    PRESENTER = 2
+    DETAILED_DECK = 1
+    PRESENTER_SLIDES = 2
 
 class SlideDeckLength(Enum):
     DEFAULT = 1
@@ -544,7 +728,18 @@ class ChatResponseLength(Enum):
     DEFAULT = 1
     LONGER = 4
     SHORTER = 5
+
+class ChatMode(Enum):
+    """Predefined chat modes for common use cases (service-level enum)."""
+    DEFAULT = "default"          # General purpose
+    LEARNING_GUIDE = "learning_guide"  # Educational focus
+    CONCISE = "concise"          # Brief responses
+    DETAILED = "detailed"        # Verbose responses
 ```
+
+**ChatGoal vs ChatMode:**
+- `ChatGoal` is an RPC-level enum used with `client.chat.configure()` for low-level API configuration
+- `ChatMode` is a service-level enum providing predefined configurations for common use cases
 
 ---
 

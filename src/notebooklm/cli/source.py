@@ -519,6 +519,10 @@ def source_guide(ctx, source_id, notebook_id, json_output, client_auth):
             summary = guide.get("summary", "")
             keywords = guide.get("keywords", [])
 
+            if not summary and not keywords:
+                console.print("[yellow]No guide available for this source[/yellow]")
+                return
+
             if summary:
                 console.print("[bold cyan]Summary:[/bold cyan]")
                 console.print(summary)
@@ -527,8 +531,6 @@ def source_guide(ctx, source_id, notebook_id, json_output, client_auth):
             if keywords:
                 console.print("[bold cyan]Keywords:[/bold cyan]")
                 console.print(", ".join(keywords))
-            elif not summary:
-                console.print("[yellow]No guide available for this source[/yellow]")
 
     return _run()
 

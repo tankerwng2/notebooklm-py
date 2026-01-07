@@ -416,6 +416,159 @@ class TestSourceAddDrive:
 # =============================================================================
 
 
+# =============================================================================
+# SOURCE GUIDE TESTS
+# =============================================================================
+
+
+class TestSourceGuide:
+    def test_source_guide_with_summary_and_keywords(self, runner, mock_auth):
+        with patch_client_for_module("source") as mock_client_cls:
+            mock_client = create_mock_client()
+            mock_client.sources.list = AsyncMock(
+                return_value=[
+                    Source(id="src_123", title="Test Source", source_type="url")
+                ]
+            )
+            mock_client.sources.get_guide = AsyncMock(
+                return_value={
+                    "summary": "This is a **test** summary about AI.",
+                    "keywords": ["AI", "machine learning", "data science"]
+                }
+            )
+            mock_client_cls.return_value = mock_client
+
+            with patch("notebooklm.cli.helpers.fetch_tokens", new_callable=AsyncMock) as mock_fetch:
+                mock_fetch.return_value = ("csrf", "session")
+                result = runner.invoke(cli, ["source", "guide", "src_123", "-n", "nb_123"])
+
+            assert result.exit_code == 0
+            assert "Summary" in result.output
+            assert "test" in result.output
+            assert "Keywords" in result.output
+            assert "AI" in result.output
+
+    def test_source_guide_no_guide_available(self, runner, mock_auth):
+        with patch_client_for_module("source") as mock_client_cls:
+            mock_client = create_mock_client()
+            mock_client.sources.list = AsyncMock(
+                return_value=[
+                    Source(id="src_123", title="Test Source", source_type="url")
+                ]
+            )
+            mock_client.sources.get_guide = AsyncMock(
+                return_value={"summary": "", "keywords": []}
+            )
+            mock_client_cls.return_value = mock_client
+
+            with patch("notebooklm.cli.helpers.fetch_tokens", new_callable=AsyncMock) as mock_fetch:
+                mock_fetch.return_value = ("csrf", "session")
+                result = runner.invoke(cli, ["source", "guide", "src_123", "-n", "nb_123"])
+
+            assert result.exit_code == 0
+            assert "No guide available" in result.output
+
+    def test_source_guide_json_output(self, runner, mock_auth):
+        with patch_client_for_module("source") as mock_client_cls:
+            mock_client = create_mock_client()
+            mock_client.sources.list = AsyncMock(
+                return_value=[
+                    Source(id="src_123", title="Test Source", source_type="url")
+                ]
+            )
+            mock_client.sources.get_guide = AsyncMock(
+                return_value={
+                    "summary": "Test summary",
+                    "keywords": ["keyword1", "keyword2"]
+                }
+            )
+            mock_client_cls.return_value = mock_client
+
+            with patch("notebooklm.cli.helpers.fetch_tokens", new_callable=AsyncMock) as mock_fetch:
+                mock_fetch.return_value = ("csrf", "session")
+                result = runner.invoke(cli, ["source", "guide", "src_123", "-n", "nb_123", "--json"])
+
+            assert result.exit_code == 0
+            data = json.loads(result.output)
+            assert data["source_id"] == "src_123"
+            assert data["summary"] == "Test summary"
+            assert data["keywords"] == ["keyword1", "keyword2"]
+
+    def test_source_guide_summary_only(self, runner, mock_auth):
+        """Test that summary is displayed even when keywords are empty."""
+        with patch_client_for_module("source") as mock_client_cls:
+            mock_client = create_mock_client()
+            mock_client.sources.list = AsyncMock(
+                return_value=[
+                    Source(id="src_123", title="Test Source", source_type="url")
+                ]
+            )
+            mock_client.sources.get_guide = AsyncMock(
+                return_value={"summary": "Summary without keywords", "keywords": []}
+            )
+            mock_client_cls.return_value = mock_client
+
+            with patch("notebooklm.cli.helpers.fetch_tokens", new_callable=AsyncMock) as mock_fetch:
+                mock_fetch.return_value = ("csrf", "session")
+                result = runner.invoke(cli, ["source", "guide", "src_123", "-n", "nb_123"])
+
+            assert result.exit_code == 0
+            assert "Summary" in result.output
+            assert "Summary without keywords" in result.output
+            assert "No guide available" not in result.output
+
+
+# =============================================================================
+# SOURCE STALE TESTS
+# =============================================================================
+
+
+class TestSourceStale:
+    def test_source_stale_is_stale(self, runner, mock_auth):
+        """Test exit code 0 when source is stale (needs refresh)."""
+        with patch_client_for_module("source") as mock_client_cls:
+            mock_client = create_mock_client()
+            mock_client.sources.list = AsyncMock(
+                return_value=[
+                    Source(id="src_123", title="Test Source", source_type="url")
+                ]
+            )
+            mock_client.sources.check_freshness = AsyncMock(return_value=False)  # Not fresh = stale
+            mock_client_cls.return_value = mock_client
+
+            with patch("notebooklm.cli.helpers.fetch_tokens", new_callable=AsyncMock) as mock_fetch:
+                mock_fetch.return_value = ("csrf", "session")
+                result = runner.invoke(cli, ["source", "stale", "src_123", "-n", "nb_123"])
+
+            assert result.exit_code == 0  # 0 = stale (condition is true)
+            assert "stale" in result.output.lower()
+            assert "refresh" in result.output.lower()
+
+    def test_source_stale_is_fresh(self, runner, mock_auth):
+        """Test exit code 1 when source is fresh (no refresh needed)."""
+        with patch_client_for_module("source") as mock_client_cls:
+            mock_client = create_mock_client()
+            mock_client.sources.list = AsyncMock(
+                return_value=[
+                    Source(id="src_123", title="Test Source", source_type="url")
+                ]
+            )
+            mock_client.sources.check_freshness = AsyncMock(return_value=True)  # Fresh
+            mock_client_cls.return_value = mock_client
+
+            with patch("notebooklm.cli.helpers.fetch_tokens", new_callable=AsyncMock) as mock_fetch:
+                mock_fetch.return_value = ("csrf", "session")
+                result = runner.invoke(cli, ["source", "stale", "src_123", "-n", "nb_123"])
+
+            assert result.exit_code == 1  # 1 = not stale (condition is false)
+            assert "fresh" in result.output.lower()
+
+
+# =============================================================================
+# COMMAND EXISTENCE TESTS
+# =============================================================================
+
+
 class TestSourceCommandsExist:
     def test_source_group_exists(self, runner):
         result = runner.invoke(cli, ["source", "--help"])
@@ -423,6 +576,8 @@ class TestSourceCommandsExist:
         assert "list" in result.output
         assert "add" in result.output
         assert "delete" in result.output
+        assert "guide" in result.output
+        assert "stale" in result.output
 
     def test_source_add_command_exists(self, runner):
         result = runner.invoke(cli, ["source", "add", "--help"])
@@ -435,3 +590,15 @@ class TestSourceCommandsExist:
         result = runner.invoke(cli, ["source", "list", "--help"])
         assert result.exit_code == 0
         assert "--notebook" in result.output or "-n" in result.output
+
+    def test_source_guide_command_exists(self, runner):
+        result = runner.invoke(cli, ["source", "guide", "--help"])
+        assert result.exit_code == 0
+        assert "SOURCE_ID" in result.output
+        assert "--json" in result.output
+
+    def test_source_stale_command_exists(self, runner):
+        result = runner.invoke(cli, ["source", "stale", "--help"])
+        assert result.exit_code == 0
+        assert "SOURCE_ID" in result.output
+        assert "exit code" in result.output.lower()
