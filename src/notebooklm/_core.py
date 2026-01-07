@@ -40,6 +40,8 @@ class ClientCore:
         """
         self.auth = auth
         self._http_client: Optional[httpx.AsyncClient] = None
+        # Request ID counter for chat API (must be unique per request)
+        self._reqid_counter: int = 100000
         # OrderedDict for FIFO eviction when cache exceeds MAX_CONVERSATION_CACHE_SIZE
         self._conversation_cache: OrderedDict[str, list[dict[str, Any]]] = OrderedDict()
 
