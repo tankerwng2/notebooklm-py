@@ -190,7 +190,7 @@ class NotebooksAPI:
         """
         params = [page_size, page_token]
         return await self._core.rpc_call(
-            RPCMethod.LIST_FEATURED_PROJECTS,
+            RPCMethod.LIST_FEATURED_NOTEBOOKS,
             params,
             allow_null=True,
         )
@@ -302,7 +302,7 @@ class NotebooksAPI:
         """
         params = [notebook_id]
         return await self._core.rpc_call(
-            RPCMethod.PROJECT_ANALYTICS,
+            RPCMethod.NOTEBOOK_ANALYTICS,
             params,
             source_path=f"/notebook/{notebook_id}",
         )

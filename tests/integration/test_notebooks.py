@@ -343,7 +343,7 @@ class TestNotebooksAPIAdditional:
     ):
         """Test listing featured notebooks with default params."""
         response = build_rpc_response(
-            "nS9Qlc",  # LIST_FEATURED_PROJECTS
+            "nS9Qlc",  # LIST_FEATURED_NOTEBOOKS
             [[["featured_nb_1", "Featured Title", "icon"], ["featured_nb_2", "Another Featured", "icon"]]],
         )
         httpx_mock.add_response(content=response.encode())
@@ -364,7 +364,7 @@ class TestNotebooksAPIAdditional:
     ):
         """Test listing featured notebooks with pagination."""
         response = build_rpc_response(
-            "nS9Qlc",  # LIST_FEATURED_PROJECTS
+            "nS9Qlc",  # LIST_FEATURED_NOTEBOOKS
             [[["featured_nb_1", "Featured", "icon"]], "next_page_token"],
         )
         httpx_mock.add_response(content=response.encode())

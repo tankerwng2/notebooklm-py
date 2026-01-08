@@ -636,8 +636,8 @@ class TestNotebookFeatured:
             mock_client = create_mock_client()
             mock_client.notebooks.list_featured = AsyncMock(
                 return_value=[
-                    ["proj_1", "Featured Project 1"],
-                    ["proj_2", "Featured Project 2"],
+                    ["nb_1", "Featured Notebook 1"],
+                    ["nb_2", "Featured Notebook 2"],
                 ]
             )
             mock_client_cls.return_value = mock_client

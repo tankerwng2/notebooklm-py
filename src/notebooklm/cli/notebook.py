@@ -216,9 +216,9 @@ def register_notebook_commands(cli):
         """List featured/public notebooks."""
         async def _run():
             async with NotebookLMClient(client_auth) as client:
-                projects = await client.notebooks.list_featured(page_size=limit)
+                notebooks = await client.notebooks.list_featured(page_size=limit)
 
-                if not projects:
+                if not notebooks:
                     console.print("[yellow]No featured notebooks found[/yellow]")
                     return
 
@@ -226,10 +226,10 @@ def register_notebook_commands(cli):
                 table.add_column("ID", style="cyan")
                 table.add_column("Title", style="green")
 
-                for proj in projects:
-                    if isinstance(proj, list) and len(proj) > 0:
+                for nb in notebooks:
+                    if isinstance(nb, list) and len(nb) > 0:
                         table.add_row(
-                            str(proj[0] or "-"), str(proj[1] if len(proj) > 1 else "-")
+                            str(nb[0] or "-"), str(nb[1] if len(nb) > 1 else "-")
                         )
 
                 console.print(table)

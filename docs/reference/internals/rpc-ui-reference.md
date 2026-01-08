@@ -45,8 +45,8 @@
 | `rc3d8d` | RENAME_ARTIFACT | Rename artifact | `_artifacts.py` |
 | `Krh3pd` | EXPORT_ARTIFACT | Export to Docs/Sheets | `_artifacts.py` |
 | `RGP97b` | SHARE_ARTIFACT | Toggle notebook sharing | `_notebooks.py` |
-| `nS9Qlc` | LIST_FEATURED_PROJECTS | List featured notebooks | `_notebooks.py` |
-| `QDyure` | SHARE_PROJECT | Set notebook visibility (restricted/public) | `_notebooks.py` |
+| `nS9Qlc` | LIST_FEATURED_NOTEBOOKS | List featured notebooks | `_notebooks.py` |
+| `QDyure` | SHARE_NOTEBOOK | Set notebook visibility (restricted/public) | `_notebooks.py` |
 | `JFMDGd` | GET_SHARE_STATUS | Get notebook share settings | Not implemented |
 | `ciyUvf` | GET_SUGGESTED_REPORTS | Get AI-suggested report formats | `_artifacts.py` |
 
@@ -863,7 +863,7 @@ await rpc_call(
 # ]
 ```
 
-### RPC: LIST_FEATURED_PROJECTS (nS9Qlc)
+### RPC: LIST_FEATURED_NOTEBOOKS (nS9Qlc)
 
 **Source:** `_notebooks.py::list_featured()`
 
@@ -891,7 +891,7 @@ params = [
 # Response: Share status information
 ```
 
-### RPC: SHARE_PROJECT (QDyure)
+### RPC: SHARE_NOTEBOOK (QDyure)
 
 **Source:** `_notebooks.py::share()`
 
@@ -944,7 +944,7 @@ params = [
 
 Notebooks have **two independent sharing toggles**:
 
-1. **Visibility** (SHARE_PROJECT - QDyure or SHARE_ARTIFACT - RGP97b):
+1. **Visibility** (SHARE_NOTEBOOK - QDyure or SHARE_ARTIFACT - RGP97b):
    - `[0]` = Restricted (only specific people)
    - `[1]` = Anyone with the link
 
