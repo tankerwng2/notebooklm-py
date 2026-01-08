@@ -255,7 +255,7 @@ class SourceStatus(int, Enum):
     After adding a source to a notebook, it goes through processing
     before it can be used for chat or artifact generation.
 
-    Values reverse-engineered from GET_NOTEBOOK API response at source[3][1].
+    Values discovered from GET_NOTEBOOK API response at source[3][1].
     """
 
     PROCESSING = 1  # Source is being processed (indexing content)

@@ -4,7 +4,7 @@ This module contains all dataclasses and re-exports enums from rpc/types.py
 for convenient access.
 
 Usage:
-    from notebooklm.types import Notebook, Source, Artifact, ArtifactStatus
+    from notebooklm.types import Notebook, Source, Artifact, GenerationStatus
     from notebooklm.types import AudioFormat, VideoFormat, StudioContentType
 """
 
@@ -39,7 +39,6 @@ __all__ = [
     "SuggestedTopic",
     "Source",
     "Artifact",
-    "ArtifactStatus",
     "GenerationStatus",
     "ReportSuggestion",
     "Note",
@@ -484,28 +483,6 @@ class Artifact:
         elif title_lower.startswith("blog post"):
             return "blog_post"
         return "report"
-
-
-@dataclass
-class ArtifactStatus:
-    """Status of an artifact generation task.
-
-    Deprecated: Use GenerationStatus instead.
-    """
-
-    task_id: str
-    status: str
-    url: Optional[str] = None
-    error: Optional[str] = None
-    metadata: Optional[dict[str, Any]] = None
-
-    @property
-    def is_complete(self) -> bool:
-        return self.status == "completed"
-
-    @property
-    def is_failed(self) -> bool:
-        return self.status == "failed"
 
 
 @dataclass

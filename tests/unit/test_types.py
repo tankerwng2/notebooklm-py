@@ -9,7 +9,6 @@ from notebooklm.types import (
     SuggestedTopic,
     Source,
     Artifact,
-    ArtifactStatus,
     GenerationStatus,
     ReportSuggestion,
     Note,
@@ -321,19 +320,6 @@ class TestGenerationStatus:
         # Completed status (never rate limited)
         completed = GenerationStatus(task_id="t1", status="completed")
         assert completed.is_rate_limited is False
-
-
-class TestArtifactStatus:
-    def test_properties(self):
-        """Test ArtifactStatus properties (deprecated but still used)."""
-        completed = ArtifactStatus(task_id="t1", status="completed")
-        failed = ArtifactStatus(task_id="t2", status="failed")
-
-        assert completed.is_complete is True
-        assert completed.is_failed is False
-
-        assert failed.is_failed is True
-        assert failed.is_complete is False
 
 
 class TestNotebookDescription:

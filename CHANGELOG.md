@@ -7,48 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- **Research polling CLI commands** for LLM agent workflows:
-  - `notebooklm research status` - Check research progress (non-blocking)
-  - `notebooklm research wait --import-all` - Wait for completion and import sources
-  - `notebooklm source add-research --no-wait` - Start deep research without blocking
-  - Enables subagent pattern for long-running deep research operations
+No unreleased changes.
 
-### Enhanced
-- **Multi-artifact downloads**: All download commands now support advanced multi-artifact features:
-  - `download audio` - Download all audio overviews with intelligent selection
-  - `download video` - Download all video overviews with intelligent selection
-  - `download infographic` - Download all infographics with intelligent selection
-  - `download slide-deck` - Download all slide decks with directory-based organization
-
-  Each command now includes:
-  - Multiple artifact selection (--all flag)
-  - Smart defaults (optional OUTPUT_PATH)
-  - Intelligent filtering (--latest, --earliest, --name, --artifact-id)
-  - File/directory conflict handling (--force, --no-clobber, auto-rename)
-  - Preview mode (--dry-run)
-  - Structured output (--json)
-  - Safe filename generation from artifact titles
-  - Progress indicators for batch downloads
-  - Detailed result reporting (downloaded/skipped/failed)
-
-### Added
-- `select_artifact()` helper for intelligent artifact selection
-- `artifact_title_to_filename()` helper for safe filename conversion
-- `_download_artifacts_generic()` - Generic download implementation for all artifact types
-- `_display_download_result()` - Unified result display helper
-
-### Refactored
-- Eliminated 677 lines of duplicated download code (21.4% reduction):
-  - Before: 4 commands × ~320 lines = ~1,280 lines of duplicated logic
-  - After: 1 generic function (~300 lines) + 4 thin wrappers (~65 lines each)
-  - Result: Improved maintainability and consistency across all download commands
-
-## [0.1.0] - 2026-01-05
+## [0.1.0] - 2026-01-08
 
 ### Added
 - Initial release of `notebooklm-py` - unofficial Python client for Google NotebookLM
 - Full notebook CRUD operations (create, list, rename, delete)
+- **Research polling CLI commands** for LLM agent workflows:
+  - `notebooklm research status` - Check research progress (non-blocking)
+  - `notebooklm research wait --import-all` - Wait for completion and import sources
+  - `notebooklm source add-research --no-wait` - Start deep research without blocking
+- **Multi-artifact downloads** with intelligent selection:
+  - `download audio`, `download video`, `download infographic`, `download slide-deck`
+  - Multiple artifact selection (--all flag)
+  - Smart defaults and intelligent filtering (--latest, --earliest, --name, --artifact-id)
+  - File/directory conflict handling (--force, --no-clobber, auto-rename)
+  - Preview mode (--dry-run) and structured output (--json)
 - Source management:
   - Add URL sources (with YouTube transcript support)
   - Add text sources
@@ -86,7 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 This is the initial public release of `notebooklm-py`. While core functionality is tested and working, please note:
 
-- **RPC Protocol Fragility**: This library uses reverse-engineered Google APIs. Method IDs can change without notice, potentially breaking functionality. See [Troubleshooting](docs/troubleshooting.md) for debugging guidance.
+- **RPC Protocol Fragility**: This library uses undocumented Google APIs. Method IDs can change without notice, potentially breaking functionality. See [Troubleshooting](docs/troubleshooting.md) for debugging guidance.
 - **Unofficial Status**: This is not affiliated with or endorsed by Google.
 - **API Stability**: The Python API may change in future releases as we refine the interface.
 

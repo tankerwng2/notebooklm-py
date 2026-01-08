@@ -696,7 +696,7 @@ def source_wait(ctx, source_id, notebook_id, timeout, json_output, client_auth):
                         "source_id": e.source_id,
                         "status": "timeout",
                         "last_status_code": e.last_status,
-                        "timeout_seconds": e.timeout,
+                        "timeout_seconds": int(e.timeout),
                         "error": str(e),
                     }
                     json_output_response(data)

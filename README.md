@@ -10,8 +10,18 @@ Automate NotebookLM programmatically. Create notebooks, add sources, chat with y
 [![PyPI version](https://badge.fury.io/py/notebooklm-py.svg)](https://badge.fury.io/py/notebooklm-py)
 [![Python Version](https://img.shields.io/pypi/pyversions/notebooklm-py.svg)](https://pypi.org/project/notebooklm-py/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Tests](https://github.com/teng-lin/notebooklm-py/actions/workflows/test.yml/badge.svg)](https://github.com/teng-lin/notebooklm-py/actions/workflows/test.yml)
 
-> **⚠️ Unofficial API**: This library uses undocumented Google APIs that can change without notice. Not affiliated with or endorsed by Google. See [Troubleshooting](docs/troubleshooting.md) if you encounter issues.
+> **⚠️ Beta Release - Use at Your Own Risk**
+>
+> This is an **unofficial library** using **undocumented Google APIs**. Please understand:
+>
+> - **No affiliation with Google** - This project is not endorsed or supported by Google
+> - **APIs can break anytime** - Google can change internal APIs without notice, breaking this library
+> - **No stability guarantees** - RPC method IDs are obfuscated and subject to change
+> - **Rate limits apply** - Heavy usage may trigger Google's rate limiting
+>
+> **Not recommended for production systems.** See [Troubleshooting](docs/troubleshooting.md) for handling API changes.
 
 **Three ways to use:**
 - **Python Library** - Async API for application integration
@@ -110,6 +120,7 @@ notebooklm skill install
 - **[Python API](docs/python-api.md)** - Full API reference
 - **[Configuration](docs/configuration.md)** - Storage and settings
 - **[Troubleshooting](docs/troubleshooting.md)** - Common issues and solutions
+- **[API Stability](docs/stability.md)** - Versioning policy and stability guarantees
 
 ### For Contributors
 
@@ -117,6 +128,16 @@ notebooklm skill install
 - **[Testing](docs/contributing/testing.md)** - Running and writing tests
 - **[RPC Capture](docs/reference/internals/rpc-capture.md)** - Protocol reference and capture guides
 - **[Debugging](docs/contributing/debugging.md)** - Network capture guide
+- **[Changelog](CHANGELOG.md)** - Version history and release notes
+- **[Security](SECURITY.md)** - Security policy and credential handling
+
+## Platform Support
+
+| Platform | Status | Notes |
+|----------|--------|-------|
+| **macOS** | ✅ Tested | Primary development platform |
+| **Linux** | ✅ Tested | Fully supported |
+| **Windows** | ⚠️ Untested | May work, but not tested in CI |
 
 ## License
 

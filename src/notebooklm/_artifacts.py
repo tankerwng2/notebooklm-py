@@ -119,10 +119,10 @@ class ArtifactsAPI:
             try:
                 mind_maps = await self._notes.list_mind_maps(notebook_id)
                 for mm_data in mind_maps:
-                    artifact = Artifact.from_mind_map(mm_data)
-                    if artifact is not None:  # None means deleted (status=2)
-                        if artifact_type is None or artifact.artifact_type == artifact_type:
-                            artifacts.append(artifact)
+                    mind_map_artifact = Artifact.from_mind_map(mm_data)
+                    if mind_map_artifact is not None:  # None means deleted (status=2)
+                        if artifact_type is None or mind_map_artifact.artifact_type == artifact_type:
+                            artifacts.append(mind_map_artifact)
             except (RPCError, httpx.HTTPError) as e:
                 # Network/API errors - log and continue with studio artifacts
                 # This ensures users can see their audio/video/reports even if

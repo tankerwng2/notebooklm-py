@@ -1,7 +1,7 @@
 """NotebookLM API Client - Main entry point.
 
 This module provides the NotebookLMClient class, a modern async client
-for interacting with Google NotebookLM using reverse-engineered RPC APIs.
+for interacting with Google NotebookLM using undocumented RPC APIs.
 
 Example:
     async with NotebookLMClient.from_storage() as client:

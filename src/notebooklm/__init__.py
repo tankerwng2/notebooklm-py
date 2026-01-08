@@ -7,42 +7,27 @@ Example usage:
         notebooks = await client.notebooks.list()
         await client.sources.add_url(notebook_id, "https://example.com")
         result = await client.chat.ask(notebook_id, "What is this about?")
+
+Note:
+    This library uses undocumented Google APIs that can change without notice.
+    See docs/troubleshooting.md for guidance on handling API changes.
 """
 
 __version__ = "0.1.0"
 
-from .rpc import (
-    RPCMethod,
-    StudioContentType,
-    BATCHEXECUTE_URL,
-    QUERY_URL,
-    encode_rpc_request,
-    build_request_body,
-    decode_response,
-    RPCError,
-)
-from .auth import (
-    AuthTokens,
-    extract_cookies_from_storage,
-    extract_csrf_from_html,
-    extract_session_id_from_html,
-    load_auth_from_storage,
-    MINIMUM_REQUIRED_COOKIES,
-    ALLOWED_COOKIE_DOMAINS,
-    DEFAULT_STORAGE_PATH,
-)
+# Public API: Authentication
+from .auth import AuthTokens, DEFAULT_STORAGE_PATH
 
-# Client
+# Public API: Client
 from .client import NotebookLMClient
 
-# Type exports
+# Public API: Types and dataclasses
 from .types import (
     Notebook,
     NotebookDescription,
     SuggestedTopic,
     Source,
     Artifact,
-    ArtifactStatus,
     GenerationStatus,
     ReportSuggestion,
     Note,
@@ -54,7 +39,8 @@ from .types import (
     SourceProcessingError,
     SourceTimeoutError,
     SourceNotFoundError,
-    # Re-exported enums
+    # Enums for configuration
+    StudioContentType,
     AudioFormat,
     AudioLength,
     VideoFormat,
@@ -72,35 +58,22 @@ from .types import (
     SourceStatus,
 )
 
+# Public API: RPC errors (needed for exception handling)
+from .rpc import RPCError
+
 __all__ = [
     "__version__",
-    # RPC layer
-    "RPCMethod",
-    "StudioContentType",
-    "BATCHEXECUTE_URL",
-    "QUERY_URL",
-    "encode_rpc_request",
-    "build_request_body",
-    "decode_response",
-    "RPCError",
+    # Client (main entry point)
+    "NotebookLMClient",
     # Auth
     "AuthTokens",
-    "extract_cookies_from_storage",
-    "extract_csrf_from_html",
-    "extract_session_id_from_html",
-    "load_auth_from_storage",
-    "MINIMUM_REQUIRED_COOKIES",
-    "ALLOWED_COOKIE_DOMAINS",
     "DEFAULT_STORAGE_PATH",
-    # Client
-    "NotebookLMClient",
     # Types
     "Notebook",
     "NotebookDescription",
     "SuggestedTopic",
     "Source",
     "Artifact",
-    "ArtifactStatus",
     "GenerationStatus",
     "ReportSuggestion",
     "Note",
@@ -112,7 +85,9 @@ __all__ = [
     "SourceProcessingError",
     "SourceTimeoutError",
     "SourceNotFoundError",
+    "RPCError",
     # Enums
+    "StudioContentType",
     "AudioFormat",
     "AudioLength",
     "VideoFormat",
