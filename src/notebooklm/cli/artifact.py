@@ -532,12 +532,10 @@ def artifact_share(ctx, notebook_id, artifact_id, public, client_auth):
                 nb_id, artifact_id=artifact_id, public=public
             )
 
-            if result:
-                status = "public" if public else "private"
-                artifact_desc = f"Artifact {artifact_id}" if artifact_id else "Artifact"
-                console.print(f"[green]{artifact_desc} is now {status}[/green]")
-                console.print(result)
-            else:
-                console.print("[yellow]Share returned no result[/yellow]")
+            status = "public" if result["public"] else "private"
+            artifact_desc = f"Artifact {result['artifact_id']}" if result.get("artifact_id") else "Artifact"
+            console.print(f"[green]{artifact_desc} is now {status}[/green]")
+            if result.get("url"):
+                console.print(f"[blue]Share URL: {result['url']}[/blue]")
 
     return _run()

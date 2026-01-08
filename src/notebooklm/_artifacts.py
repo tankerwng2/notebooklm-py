@@ -1320,7 +1320,7 @@ class ArtifactsAPI:
         notebook_id: str,
         artifact_id: Optional[str] = None,
         public: bool = False,
-    ) -> Any:
+    ) -> dict:
         """Share an artifact.
 
         Shareable artifacts include: Audio, Video, Reports, Quiz, and Flashcards.
@@ -1336,48 +1336,73 @@ class ArtifactsAPI:
             public: If True, create a public link.
 
         Returns:
-            Share result with link information.
+            Dict with 'public' status and 'url' (the share URL when public).
         """
         share_options = [1] if public else [0]
         if artifact_id:
             params = [share_options, notebook_id, artifact_id]
         else:
             params = [share_options, notebook_id]
-        return await self._core.rpc_call(
+        await self._core.rpc_call(
             RPCMethod.SHARE_ARTIFACT,
             params,
             source_path=f"/notebook/{notebook_id}",
             allow_null=True,
         )
+        # RPC returns null but share state is toggled. Return useful info.
+        # Share URL format: /notebook/{notebook_id}?artifactId={artifact_id}
+        base_url = f"https://notebooklm.google.com/notebook/{notebook_id}"
+        if public and artifact_id:
+            url = f"{base_url}?artifactId={artifact_id}"
+        elif public:
+            url = base_url
+        else:
+            url = None
+        return {
+            "public": public,
+            "url": url,
+            "artifact_id": artifact_id,
+        }
 
-    async def share_audio(self, notebook_id: str, public: bool = False) -> Any:
+    async def share_audio(
+        self, notebook_id: str, artifact_id: Optional[str] = None, public: bool = False
+    ) -> dict:
         """Share an audio overview.
 
-        Convenience method for sharing the audio overview.
-        Equivalent to share(notebook_id, public=public).
-
         Args:
             notebook_id: The notebook ID.
+            artifact_id: The audio artifact ID. If not provided, shares the first audio.
             public: If True, create a public link.
 
         Returns:
-            Share result with link information.
+            Dict with 'public' status, 'url', and 'artifact_id'.
         """
-        return await self.share(notebook_id, public=public)
+        # If no artifact_id provided, find the first audio artifact
+        if artifact_id is None:
+            artifacts = await self.list(notebook_id, artifact_type=StudioContentType.AUDIO.value)
+            if artifacts:
+                artifact_id = artifacts[0].id
+        return await self.share(notebook_id, artifact_id=artifact_id, public=public)
 
-    async def share_video(self, notebook_id: str, public: bool = False) -> Any:
+    async def share_video(
+        self, notebook_id: str, artifact_id: Optional[str] = None, public: bool = False
+    ) -> dict:
         """Share a video overview.
 
-        Convenience method for sharing the video overview.
-
         Args:
             notebook_id: The notebook ID.
+            artifact_id: The video artifact ID. If not provided, shares the first video.
             public: If True, create a public link.
 
         Returns:
-            Share result with link information.
+            Dict with 'public' status, 'url', and 'artifact_id'.
         """
-        return await self.share(notebook_id, public=public)
+        # If no artifact_id provided, find the first video artifact
+        if artifact_id is None:
+            artifacts = await self.list(notebook_id, artifact_type=StudioContentType.VIDEO.value)
+            if artifacts:
+                artifact_id = artifacts[0].id
+        return await self.share(notebook_id, artifact_id=artifact_id, public=public)
 
     # =========================================================================
     # Suggestions

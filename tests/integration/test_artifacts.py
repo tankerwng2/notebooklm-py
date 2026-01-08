@@ -564,17 +564,22 @@ class TestArtifactsAPI:
         httpx_mock: HTTPXMock,
         build_rpc_response,
     ):
-        """Test sharing audio overview."""
+        """Test sharing audio overview with explicit artifact_id."""
         response = build_rpc_response(
             RPCMethod.SHARE_ARTIFACT,
-            ["https://notebooklm.google.com/share/abc123"],
+            None,  # Share returns null, we build the URL
         )
         httpx_mock.add_response(content=response.encode())
 
         async with NotebookLMClient(auth_tokens) as client:
-            result = await client.artifacts.share_audio("nb_123", public=True)
+            # Pass artifact_id to skip list() call
+            result = await client.artifacts.share_audio(
+                "nb_123", artifact_id="audio_001", public=True
+            )
 
-        assert result is not None
+        assert result["public"] is True
+        assert result["artifact_id"] == "audio_001"
+        assert "audio_001" in result["url"]
         request = httpx_mock.get_request()
         assert RPCMethod.SHARE_ARTIFACT.value in str(request.url)
 
@@ -585,17 +590,21 @@ class TestArtifactsAPI:
         httpx_mock: HTTPXMock,
         build_rpc_response,
     ):
-        """Test sharing video overview."""
+        """Test sharing video overview with explicit artifact_id."""
         response = build_rpc_response(
             RPCMethod.SHARE_ARTIFACT,
-            ["https://notebooklm.google.com/share/video123"],
+            None,
         )
         httpx_mock.add_response(content=response.encode())
 
         async with NotebookLMClient(auth_tokens) as client:
-            result = await client.artifacts.share_video("nb_123", public=True)
+            # Pass artifact_id to skip list() call
+            result = await client.artifacts.share_video(
+                "nb_123", artifact_id="video_001", public=True
+            )
 
-        assert result is not None
+        assert result["public"] is True
+        assert result["artifact_id"] == "video_001"
         request = httpx_mock.get_request()
         assert RPCMethod.SHARE_ARTIFACT.value in str(request.url)
 
@@ -609,7 +618,7 @@ class TestArtifactsAPI:
         """Test sharing a specific artifact (report/quiz/flashcards)."""
         response = build_rpc_response(
             RPCMethod.SHARE_ARTIFACT,
-            ["https://notebooklm.google.com/share/report456"],
+            None,
         )
         httpx_mock.add_response(content=response.encode())
 
@@ -618,7 +627,9 @@ class TestArtifactsAPI:
                 "nb_123", artifact_id="art_456", public=True
             )
 
-        assert result is not None
+        assert result["public"] is True
+        assert result["artifact_id"] == "art_456"
+        assert "art_456" in result["url"]
         request = httpx_mock.get_request()
         assert RPCMethod.SHARE_ARTIFACT.value in str(request.url)
         # Verify artifact_id is included in request
@@ -634,13 +645,15 @@ class TestArtifactsAPI:
         """Test making an artifact private."""
         response = build_rpc_response(
             RPCMethod.SHARE_ARTIFACT,
-            None,  # Private sharing may return null
+            None,
         )
         httpx_mock.add_response(content=response.encode())
 
         async with NotebookLMClient(auth_tokens) as client:
             result = await client.artifacts.share("nb_123", public=False)
 
+        assert result["public"] is False
+        assert result["url"] is None
         request = httpx_mock.get_request()
         assert RPCMethod.SHARE_ARTIFACT.value in str(request.url)
 

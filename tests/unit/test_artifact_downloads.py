@@ -330,17 +330,17 @@ class TestShareArtifact:
     async def test_share_public(self, mock_artifacts_api):
         """Test sharing an artifact publicly."""
         api, mock_core = mock_artifacts_api
-        mock_core.rpc_call.return_value = {
-            "share_url": "https://notebooklm.google.com/share/abc123"
-        }
+        mock_core.rpc_call.return_value = None
 
-        result = await api.share("nb_123", public=True)
+        result = await api.share("nb_123", artifact_id="art_123", public=True)
 
-        assert result is not None
+        assert result["public"] is True
+        assert result["artifact_id"] == "art_123"
+        assert "art_123" in result["url"]
         mock_core.rpc_call.assert_called_once()
         call_args = mock_core.rpc_call.call_args
-        # Check params: [[1], notebook_id]
-        assert call_args[0][1] == [[1], "nb_123"]
+        # Check params: [[1], notebook_id, artifact_id]
+        assert call_args[0][1] == [[1], "nb_123", "art_123"]
 
     @pytest.mark.asyncio
     async def test_share_private(self, mock_artifacts_api):
@@ -350,6 +350,8 @@ class TestShareArtifact:
 
         result = await api.share("nb_123", public=False)
 
+        assert result["public"] is False
+        assert result["url"] is None
         mock_core.rpc_call.assert_called_once()
         call_args = mock_core.rpc_call.call_args
         # Check params: [[0], notebook_id]
@@ -359,38 +361,84 @@ class TestShareArtifact:
     async def test_share_with_artifact_id(self, mock_artifacts_api):
         """Test sharing a specific artifact by ID."""
         api, mock_core = mock_artifacts_api
-        mock_core.rpc_call.return_value = {
-            "share_url": "https://notebooklm.google.com/share/report456"
-        }
+        mock_core.rpc_call.return_value = None
 
         result = await api.share("nb_123", artifact_id="art_456", public=True)
 
-        assert result is not None
+        assert result["public"] is True
+        assert result["artifact_id"] == "art_456"
+        assert "art_456" in result["url"]
         mock_core.rpc_call.assert_called_once()
         call_args = mock_core.rpc_call.call_args
         # Check params: [[1], notebook_id, artifact_id]
         assert call_args[0][1] == [[1], "nb_123", "art_456"]
 
     @pytest.mark.asyncio
-    async def test_share_audio_calls_share(self, mock_artifacts_api):
-        """Test share_audio is a convenience wrapper for share."""
+    async def test_share_audio_finds_artifact(self, mock_artifacts_api):
+        """Test share_audio finds the first audio artifact."""
         api, mock_core = mock_artifacts_api
-        mock_core.rpc_call.return_value = {"share_url": "..."}
+        # First call: list artifacts, second call: share
+        mock_core.rpc_call.side_effect = [
+            # List artifacts response with audio
+            [
+                [
+                    ["audio_001", "Audio Title", 1, None, 3, None, []],
+                ]
+            ],
+            # Share response
+            None,
+        ]
 
-        await api.share_audio("nb_123", public=True)
+        result = await api.share_audio("nb_123", public=True)
 
-        mock_core.rpc_call.assert_called_once()
-        call_args = mock_core.rpc_call.call_args
-        assert call_args[0][1] == [[1], "nb_123"]
+        assert result["public"] is True
+        assert result["artifact_id"] == "audio_001"
+        assert "audio_001" in result["url"]
 
     @pytest.mark.asyncio
-    async def test_share_video_calls_share(self, mock_artifacts_api):
-        """Test share_video is a convenience wrapper for share."""
+    async def test_share_audio_with_explicit_id(self, mock_artifacts_api):
+        """Test share_audio with explicit artifact_id skips list."""
         api, mock_core = mock_artifacts_api
-        mock_core.rpc_call.return_value = {"share_url": "..."}
+        mock_core.rpc_call.return_value = None
 
-        await api.share_video("nb_123", public=True)
+        result = await api.share_audio("nb_123", artifact_id="my_audio", public=True)
 
+        # Should only call share, not list
         mock_core.rpc_call.assert_called_once()
-        call_args = mock_core.rpc_call.call_args
-        assert call_args[0][1] == [[1], "nb_123"]
+        assert result["artifact_id"] == "my_audio"
+
+    @pytest.mark.asyncio
+    async def test_share_video_finds_artifact(self, mock_artifacts_api):
+        """Test share_video finds the first video artifact."""
+        api, mock_core = mock_artifacts_api
+        mock_core.rpc_call.side_effect = [
+            # List artifacts response with video
+            [
+                [
+                    ["video_001", "Video Title", 3, None, 3, None, []],
+                ]
+            ],
+            # Share response
+            None,
+        ]
+
+        result = await api.share_video("nb_123", public=True)
+
+        assert result["public"] is True
+        assert result["artifact_id"] == "video_001"
+
+    @pytest.mark.asyncio
+    async def test_share_video_no_video_found(self, mock_artifacts_api):
+        """Test share_video when no video exists."""
+        api, mock_core = mock_artifacts_api
+        mock_core.rpc_call.side_effect = [
+            # Empty list response
+            [[]],
+            # Share response
+            None,
+        ]
+
+        result = await api.share_video("nb_123", public=True)
+
+        assert result["public"] is True
+        assert result["artifact_id"] is None
