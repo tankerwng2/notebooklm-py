@@ -516,6 +516,7 @@ class GenerationStatus:
     status: str  # "pending", "in_progress", "completed", "failed"
     url: Optional[str] = None
     error: Optional[str] = None
+    error_code: Optional[str] = None  # e.g., "USER_DISPLAYABLE_ERROR" for rate limits
     metadata: Optional[dict[str, Any]] = None
 
     @property
@@ -537,6 +538,27 @@ class GenerationStatus:
     def is_in_progress(self) -> bool:
         """Check if generation is in progress."""
         return self.status == "in_progress"
+
+    @property
+    def is_rate_limited(self) -> bool:
+        """Check if generation failed due to rate limiting or quota exceeded.
+
+        Returns True when the API rejected the request, typically due to
+        too many requests or quota exhaustion.
+        """
+        if not self.is_failed:
+            return False
+
+        # Prefer structured error code when available
+        if self.error_code == "USER_DISPLAYABLE_ERROR":
+            return True
+
+        # Fall back to string matching for backwards compatibility
+        if self.error is not None:
+            error_lower = self.error.lower()
+            return "rate limit" in error_lower or "quota" in error_lower
+
+        return False
 
 
 @dataclass

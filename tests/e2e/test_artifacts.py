@@ -9,7 +9,7 @@ Generation tests are in test_generation.py. This file contains:
 
 import asyncio
 import pytest
-from .conftest import requires_auth
+from .conftest import requires_auth, assert_generation_started
 from notebooklm import Artifact, ReportSuggestion
 
 
@@ -158,10 +158,13 @@ class TestArtifactPolling:
 
     @pytest.mark.asyncio
     async def test_poll_studio_status(self, client, generation_notebook):
-        """Test polling artifact generation status."""
-        result = await client.artifacts.generate_quiz(generation_notebook.id)
-        assert result is not None
-        assert result.task_id, "Quiz generation should return a task_id"
+        """Test polling artifact generation status.
+
+        Uses flashcards as they are more reliable than quizzes which hit
+        rate limits more frequently.
+        """
+        result = await client.artifacts.generate_flashcards(generation_notebook.id)
+        assert_generation_started(result, "Flashcard")
 
         await asyncio.sleep(2)
         status = await client.artifacts.poll_status(generation_notebook.id, result.task_id)
@@ -177,10 +180,9 @@ class TestArtifactMutations:
     @pytest.mark.asyncio
     async def test_delete_artifact(self, client, temp_notebook):
         """Test deleting an artifact."""
-        # Create a quiz artifact to delete
-        result = await client.artifacts.generate_quiz(temp_notebook.id)
-        assert result is not None
-        assert result.task_id, "Quiz generation should return a task_id"
+        # Create a flashcard artifact to delete (more reliable than quiz)
+        result = await client.artifacts.generate_flashcards(temp_notebook.id)
+        assert_generation_started(result, "Flashcard")
         artifact_id = result.task_id
 
         # Wait briefly for creation
@@ -198,16 +200,15 @@ class TestArtifactMutations:
     @pytest.mark.asyncio
     async def test_rename_artifact(self, client, temp_notebook):
         """Test renaming an artifact."""
-        # Create a quiz artifact to rename
-        result = await client.artifacts.generate_quiz(temp_notebook.id)
-        assert result is not None
-        assert result.task_id, "Quiz generation should return a task_id"
+        # Create a flashcard artifact to rename (more reliable than quiz)
+        result = await client.artifacts.generate_flashcards(temp_notebook.id)
+        assert_generation_started(result, "Flashcard")
         artifact_id = result.task_id
 
         # Wait for creation
         await asyncio.sleep(3)
 
-        new_title = "Renamed Quiz E2E"
+        new_title = "Renamed Flashcard E2E"
 
         # Rename it
         await client.artifacts.rename(temp_notebook.id, artifact_id, new_title)
@@ -227,15 +228,16 @@ class TestArtifactMutations:
         ), f"Expected '{new_title}', got '{renamed_artifact.title}'"
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(reason="Quiz generation may timeout under load")
     async def test_wait_for_completion(self, client, temp_notebook):
-        """Test waiting for artifact generation to complete."""
-        # Generate a quiz (faster than audio/video)
-        result = await client.artifacts.generate_quiz(temp_notebook.id)
-        assert result is not None
-        assert result.task_id
+        """Test waiting for artifact generation to complete.
 
-        # Wait for completion with longer timeout for quizzes
+        Uses flashcards as they are more reliable than quizzes which
+        frequently hit rate limits.
+        """
+        result = await client.artifacts.generate_flashcards(temp_notebook.id)
+        assert_generation_started(result, "Flashcard")
+
+        # Wait for completion
         final_status = await client.artifacts.wait_for_completion(
             temp_notebook.id,
             result.task_id,
@@ -244,6 +246,6 @@ class TestArtifactMutations:
             timeout=120.0,
         )
 
-        # Should complete or fail (not timeout for quiz)
+        # Should complete or fail (not timeout)
         assert final_status is not None
         assert final_status.is_complete or final_status.is_failed

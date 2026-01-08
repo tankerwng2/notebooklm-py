@@ -157,6 +157,85 @@ class TestExtractRPCResult:
         with pytest.raises(RPCError):
             extract_rpc_result(chunks, RPCMethod.LIST_NOTEBOOKS.value)
 
+    def test_raises_on_user_displayable_error(self):
+        """Test raises RPCError when UserDisplayableError is embedded in response.
+
+        Google's API returns this pattern for rate limiting, quota exceeded,
+        and other user-facing restrictions.
+        """
+        # Real-world structure from API rate limit response
+        error_info = [
+            8,
+            None,
+            [
+                [
+                    "type.googleapis.com/google.internal.labs.tailwind.orchestration.v1.UserDisplayableError",
+                    [None, None, None, None, [None, [[1]], 2]],
+                ]
+            ],
+        ]
+        chunks = [
+            [
+                "wrb.fr",
+                RPCMethod.LIST_NOTEBOOKS.value,
+                None,  # null result
+                None,
+                None,
+                error_info,
+                "generic",
+            ]
+        ]
+
+        with pytest.raises(RPCError, match="rate limiting"):
+            extract_rpc_result(chunks, RPCMethod.LIST_NOTEBOOKS.value)
+
+    def test_user_displayable_error_sets_code(self):
+        """Test UserDisplayableError sets code to USER_DISPLAYABLE_ERROR."""
+        error_info = [8, None, [["UserDisplayableError", []]]]
+        chunks = [
+            ["wrb.fr", RPCMethod.LIST_NOTEBOOKS.value, None, None, None, error_info]
+        ]
+
+        with pytest.raises(RPCError) as exc_info:
+            extract_rpc_result(chunks, RPCMethod.LIST_NOTEBOOKS.value)
+
+        assert exc_info.value.code == "USER_DISPLAYABLE_ERROR"
+
+    def test_null_result_without_error_info_returns_none(self):
+        """Test null result without UserDisplayableError returns None normally."""
+        chunks = [
+            ["wrb.fr", RPCMethod.LIST_NOTEBOOKS.value, None, None, None, None]
+        ]
+
+        result = extract_rpc_result(chunks, RPCMethod.LIST_NOTEBOOKS.value)
+        assert result is None
+
+    def test_null_result_with_non_error_info_returns_none(self):
+        """Test null result with non-error data at index 5 returns None."""
+        chunks = [
+            ["wrb.fr", RPCMethod.LIST_NOTEBOOKS.value, None, None, None, [1, 2, 3]]
+        ]
+
+        result = extract_rpc_result(chunks, RPCMethod.LIST_NOTEBOOKS.value)
+        assert result is None
+
+    def test_user_displayable_error_in_dict_structure(self):
+        """Test UserDisplayableError detection in dictionary structures.
+
+        While the batchexecute protocol typically uses arrays, this ensures
+        robustness if dict structures ever appear.
+        """
+        error_info = {
+            "type": "type.googleapis.com/google.internal.labs.tailwind.orchestration.v1.UserDisplayableError",
+            "details": {"code": 1},
+        }
+        chunks = [
+            ["wrb.fr", RPCMethod.LIST_NOTEBOOKS.value, None, None, None, error_info]
+        ]
+
+        with pytest.raises(RPCError, match="rate limiting"):
+            extract_rpc_result(chunks, RPCMethod.LIST_NOTEBOOKS.value)
+
 
 class TestDecodeResponse:
     def test_full_decode_pipeline(self):
