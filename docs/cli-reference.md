@@ -1,5 +1,8 @@
 # CLI Reference
 
+**Status:** Active
+**Last Updated:** 2026-01-07
+
 Complete command reference for the `notebooklm` CLI.
 
 ## Command Structure
@@ -184,6 +187,64 @@ notebooklm source add-research "Project Alpha" --from drive --mode deep
 # Non-blocking deep research for agent workflows
 notebooklm source add-research "AI safety papers" --mode deep --no-wait
 ```
+
+### Research: `status`
+
+Check research status for the current notebook (non-blocking).
+
+```bash
+notebooklm research status [OPTIONS]
+```
+
+**Options:**
+- `-n, --notebook ID` - Notebook ID (uses current if not set)
+- `--json` - Output as JSON
+
+**Output states:**
+- **No research running** - No active research session
+- **Research in progress** - Deep research is still running
+- **Research completed** - Shows query, found sources, and summary
+
+**Examples:**
+```bash
+# Check status
+notebooklm research status
+
+# JSON output for scripts/agents
+notebooklm research status --json
+```
+
+### Research: `wait`
+
+Wait for research to complete (blocking).
+
+```bash
+notebooklm research wait [OPTIONS]
+```
+
+**Options:**
+- `-n, --notebook ID` - Notebook ID (uses current if not set)
+- `--timeout SECONDS` - Maximum seconds to wait (default: 300)
+- `--interval SECONDS` - Seconds between status checks (default: 5)
+- `--import-all` - Import all found sources when done
+- `--json` - Output as JSON
+
+**Examples:**
+```bash
+# Basic wait
+notebooklm research wait
+
+# Wait longer for deep research
+notebooklm research wait --timeout 600
+
+# Wait and auto-import sources
+notebooklm research wait --import-all
+
+# JSON output for agent workflows
+notebooklm research wait --json --import-all
+```
+
+**Use case:** Primarily for LLM agents that need to wait for non-blocking deep research started with `source add-research --no-wait`.
 
 ### Generate: `audio`
 

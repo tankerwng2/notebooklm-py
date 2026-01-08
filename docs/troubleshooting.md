@@ -1,5 +1,8 @@
 # Troubleshooting
 
+**Status:** Active
+**Last Updated:** 2026-01-07
+
 Common issues, known limitations, and workarounds for `notebooklm-py`.
 
 ## Common Errors

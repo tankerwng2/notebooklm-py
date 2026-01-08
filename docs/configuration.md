@@ -1,5 +1,8 @@
 # Configuration
 
+**Status:** Active
+**Last Updated:** 2026-01-07
+
 This guide covers storage locations, environment settings, and configuration options for `notebooklm-py`.
 
 ## File Locations

@@ -1,5 +1,8 @@
 # Testing Guide
 
+**Status:** Active
+**Last Updated:** 2026-01-07
+
 How to run tests, write new tests, and handle E2E authentication.
 
 ## Running Tests

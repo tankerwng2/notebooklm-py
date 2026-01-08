@@ -1,5 +1,8 @@
 # Architecture Guide
 
+**Status:** Active
+**Last Updated:** 2026-01-07
+
 Overview of the `notebooklm-py` codebase structure and design decisions.
 
 ## Package Structure
@@ -25,14 +28,19 @@ src/notebooklm/
 └── cli/                 # CLI implementation
     ├── __init__.py      # CLI package exports
     ├── helpers.py       # Shared utilities
+    ├── options.py       # Common Click options
+    ├── grouped.py       # Grouped command utilities
     ├── session.py       # login, use, status, clear
     ├── notebook.py      # list, create, delete, rename, etc.
     ├── source.py        # source add, list, delete, etc.
     ├── artifact.py      # artifact list, get, delete, etc.
     ├── generate.py      # generate audio, video, etc.
     ├── download.py      # download audio, video, etc.
+    ├── download_helpers.py  # Download utility functions
     ├── chat.py          # ask, configure, history
-    └── note.py          # note create, list, etc.
+    ├── note.py          # note create, list, etc.
+    ├── research.py      # research status, wait
+    └── skill.py         # skill install, status, uninstall
 ```
 
 ## Layered Architecture

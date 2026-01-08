@@ -1,5 +1,8 @@
 # Debugging Guide
 
+**Status:** Active
+**Last Updated:** 2026-01-07
+
 How to debug issues and reverse engineer new NotebookLM features.
 
 ## Capturing Network Traffic

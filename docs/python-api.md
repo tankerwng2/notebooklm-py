@@ -1,5 +1,8 @@
 # Python API Reference
 
+**Status:** Active
+**Last Updated:** 2026-01-07
+
 Complete reference for the `notebooklm` Python library.
 
 ## Migration Guide (v0.x → v1.x)

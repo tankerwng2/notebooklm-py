@@ -1,5 +1,8 @@
 # Getting Started
 
+**Status:** Active
+**Last Updated:** 2026-01-07
+
 This guide walks you through installing and using `notebooklm-py` for the first time.
 
 ## Prerequisites
@@ -32,6 +35,8 @@ cd notebooklm-py
 pip install -e ".[all]"
 playwright install chromium
 ```
+
+> **See also:** [Configuration](configuration.md) for custom storage paths and environment settings.
 
 ## Authentication
 
