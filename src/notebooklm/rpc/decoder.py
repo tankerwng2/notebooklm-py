@@ -132,6 +132,28 @@ def collect_rpc_ids(chunks: list[Any]) -> list[str]:
     return found_ids
 
 
+def _contains_user_displayable_error(obj: Any) -> bool:
+    """Check if object contains a UserDisplayableError marker.
+
+    Google's API embeds error information in index 5 of wrb.fr responses
+    when the operation fails due to rate limiting, quota, or other
+    user-facing restrictions.
+
+    Args:
+        obj: Object to search (typically index 5 of response item)
+
+    Returns:
+        True if UserDisplayableError pattern is found
+    """
+    if isinstance(obj, str):
+        return "UserDisplayableError" in obj
+    if isinstance(obj, list):
+        return any(_contains_user_displayable_error(item) for item in obj)
+    if isinstance(obj, dict):
+        return any(_contains_user_displayable_error(v) for v in obj.values())
+    return False
+
+
 def extract_rpc_result(chunks: list[Any], rpc_id: str) -> Any:
     """Extract result data for a specific RPC ID from chunks."""
     for chunk in chunks:
@@ -156,6 +178,17 @@ def extract_rpc_result(chunks: list[Any], rpc_id: str) -> Any:
 
             if item[0] == "wrb.fr" and item[1] == rpc_id:
                 result_data = item[2]
+
+                # Check for embedded UserDisplayableError when result is null
+                # This indicates rate limiting, quota exceeded, or other API restrictions
+                if result_data is None and len(item) > 5 and item[5] is not None:
+                    if _contains_user_displayable_error(item[5]):
+                        raise RPCError(
+                            "Request rejected by API - may indicate rate limiting or quota exceeded",
+                            rpc_id=rpc_id,
+                            code="USER_DISPLAYABLE_ERROR",
+                        )
+
                 if isinstance(result_data, str):
                     try:
                         return json.loads(result_data)

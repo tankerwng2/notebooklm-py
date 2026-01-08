@@ -279,6 +279,32 @@ class TestGenerationStatus:
 
         assert status.metadata == {"key": "value"}
 
+    def test_is_rate_limited(self):
+        """Test is_rate_limited property detection."""
+        # Rate limited error
+        rate_limited = GenerationStatus(
+            task_id="",
+            status="failed",
+            error="Request rejected by API - may indicate rate limiting or quota exceeded",
+        )
+        assert rate_limited.is_rate_limited is True
+
+        # Other failure (not rate limited)
+        other_failure = GenerationStatus(
+            task_id="",
+            status="failed",
+            error="Generation failed - no artifact_id returned",
+        )
+        assert other_failure.is_rate_limited is False
+
+        # Failed but no error message
+        no_error = GenerationStatus(task_id="", status="failed", error=None)
+        assert no_error.is_rate_limited is False
+
+        # Completed status (never rate limited)
+        completed = GenerationStatus(task_id="t1", status="completed")
+        assert completed.is_rate_limited is False
+
 
 class TestArtifactStatus:
     def test_properties(self):

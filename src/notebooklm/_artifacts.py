@@ -240,14 +240,7 @@ class ArtifactsAPI:
                 ],
             ],
         ]
-        result = await self._core.rpc_call(
-            RPCMethod.CREATE_VIDEO,
-            params,
-            source_path=f"/notebook/{notebook_id}",
-            allow_null=True,
-        )
-
-        return self._parse_generation_result(result)
+        return await self._call_generate(notebook_id, params)
 
     async def generate_video(
         self,
@@ -306,14 +299,7 @@ class ArtifactsAPI:
                 ],
             ],
         ]
-        result = await self._core.rpc_call(
-            RPCMethod.CREATE_VIDEO,
-            params,
-            source_path=f"/notebook/{notebook_id}",
-            allow_null=True,
-        )
-
-        return self._parse_generation_result(result)
+        return await self._call_generate(notebook_id, params)
 
     async def generate_report(
         self,
@@ -404,15 +390,7 @@ class ArtifactsAPI:
                 ],
             ],
         ]
-
-        result = await self._core.rpc_call(
-            RPCMethod.CREATE_VIDEO,
-            params,
-            source_path=f"/notebook/{notebook_id}",
-            allow_null=True,
-        )
-
-        return self._parse_generation_result(result)
+        return await self._call_generate(notebook_id, params)
 
     async def generate_study_guide(
         self,
@@ -494,14 +472,7 @@ class ArtifactsAPI:
                 ],
             ],
         ]
-        result = await self._core.rpc_call(
-            RPCMethod.CREATE_VIDEO,
-            params,
-            source_path=f"/notebook/{notebook_id}",
-            allow_null=True,
-        )
-
-        return self._parse_generation_result(result)
+        return await self._call_generate(notebook_id, params)
 
     async def generate_flashcards(
         self,
@@ -557,14 +528,7 @@ class ArtifactsAPI:
                 ],
             ],
         ]
-        result = await self._core.rpc_call(
-            RPCMethod.CREATE_VIDEO,
-            params,
-            source_path=f"/notebook/{notebook_id}",
-            allow_null=True,
-        )
-
-        return self._parse_generation_result(result)
+        return await self._call_generate(notebook_id, params)
 
     async def generate_infographic(
         self,
@@ -619,14 +583,7 @@ class ArtifactsAPI:
                 ],
             ],
         ]
-        result = await self._core.rpc_call(
-            RPCMethod.CREATE_VIDEO,
-            params,
-            source_path=f"/notebook/{notebook_id}",
-            allow_null=True,
-        )
-
-        return self._parse_generation_result(result)
+        return await self._call_generate(notebook_id, params)
 
     async def generate_slide_deck(
         self,
@@ -680,14 +637,7 @@ class ArtifactsAPI:
                 [[instructions, language, format_code, length_code]],
             ],
         ]
-        result = await self._core.rpc_call(
-            RPCMethod.CREATE_VIDEO,
-            params,
-            source_path=f"/notebook/{notebook_id}",
-            allow_null=True,
-        )
-
-        return self._parse_generation_result(result)
+        return await self._call_generate(notebook_id, params)
 
     async def generate_data_table(
         self,
@@ -737,14 +687,7 @@ class ArtifactsAPI:
                 [None, [instructions, language]],
             ],
         ]
-        result = await self._core.rpc_call(
-            RPCMethod.CREATE_VIDEO,
-            params,
-            source_path=f"/notebook/{notebook_id}",
-            allow_null=True,
-        )
-
-        return self._parse_generation_result(result)
+        return await self._call_generate(notebook_id, params)
 
     async def generate_mind_map(
         self,
@@ -1368,6 +1311,32 @@ class ArtifactsAPI:
     # =========================================================================
     # Private Helpers
     # =========================================================================
+
+    async def _call_generate(self, notebook_id: str, params: List[Any]) -> GenerationStatus:
+        """Make a generation RPC call with error handling.
+
+        Wraps the RPC call to handle UserDisplayableError (rate limiting/quota)
+        and convert to appropriate GenerationStatus.
+
+        Args:
+            notebook_id: The notebook ID.
+            params: RPC parameters for the generation call.
+
+        Returns:
+            GenerationStatus with task_id on success, or error info on failure.
+        """
+        try:
+            result = await self._core.rpc_call(
+                RPCMethod.CREATE_VIDEO,
+                params,
+                source_path=f"/notebook/{notebook_id}",
+                allow_null=True,
+            )
+            return self._parse_generation_result(result)
+        except RPCError as e:
+            if e.code == "USER_DISPLAYABLE_ERROR":
+                return GenerationStatus(task_id="", status="failed", error=str(e))
+            raise
 
     async def _list_raw(self, notebook_id: str) -> List[Any]:
         """Get raw artifact list data."""

@@ -538,6 +538,19 @@ class GenerationStatus:
         """Check if generation is in progress."""
         return self.status == "in_progress"
 
+    @property
+    def is_rate_limited(self) -> bool:
+        """Check if generation failed due to rate limiting or quota exceeded.
+
+        Returns True when the API rejected the request, typically due to
+        too many requests or quota exhaustion.
+        """
+        return (
+            self.is_failed
+            and self.error is not None
+            and "rate limit" in self.error.lower()
+        )
+
 
 @dataclass
 class ReportSuggestion:

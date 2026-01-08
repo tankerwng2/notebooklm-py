@@ -158,10 +158,19 @@ class TestArtifactPolling:
 
     @pytest.mark.asyncio
     async def test_poll_studio_status(self, client, generation_notebook):
-        """Test polling artifact generation status."""
-        result = await client.artifacts.generate_quiz(generation_notebook.id)
+        """Test polling artifact generation status.
+
+        Uses flashcards as they are more reliable than quizzes which hit
+        rate limits more frequently.
+        """
+        result = await client.artifacts.generate_flashcards(generation_notebook.id)
         assert result is not None
-        assert result.task_id, "Quiz generation should return a task_id"
+
+        # Skip if rate limited
+        if result.is_rate_limited:
+            pytest.skip("Rate limited by API")
+
+        assert result.task_id, f"Flashcard generation should return a task_id: {result.error}"
 
         await asyncio.sleep(2)
         status = await client.artifacts.poll_status(generation_notebook.id, result.task_id)
