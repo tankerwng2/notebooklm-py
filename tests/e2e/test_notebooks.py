@@ -118,14 +118,21 @@ class TestNotebookSharing:
     @pytest.mark.stable
     async def test_share_notebook(self, client, temp_notebook):
         """Test sharing a notebook."""
-        result = await client.notebooks.share(
-            temp_notebook.id,
-            settings={"public": True}
-        )
-        # Share may return URL string, share settings dict, or None
-        # Verify type if result is returned
-        if result is not None:
-            assert isinstance(result, (str, dict, list))
+        result = await client.notebooks.share(temp_notebook.id, public=True)
+        # Share returns {"public": bool, "url": str|None, "artifact_id": str|None}
+        assert isinstance(result, dict)
+        assert result["public"] is True
+        assert result["url"] is not None
+        assert temp_notebook.id in result["url"]
+
+    @pytest.mark.asyncio
+    @pytest.mark.stable
+    async def test_revoke_share_notebook(self, client, temp_notebook):
+        """Test revoking notebook sharing."""
+        result = await client.notebooks.share(temp_notebook.id, public=False)
+        assert isinstance(result, dict)
+        assert result["public"] is False
+        assert result["url"] is None
 
 
 @requires_auth

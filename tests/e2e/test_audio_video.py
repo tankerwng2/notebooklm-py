@@ -166,29 +166,3 @@ class TestVideoGeneration:
         assert result is not None
 
 
-@requires_auth
-@pytest.mark.e2e
-class TestAudioOperations:
-    @pytest.mark.asyncio
-    @pytest.mark.golden
-    async def test_share_audio(self, client, test_notebook_id):
-        """Read-only test - checks share status."""
-        result = await client.artifacts.share_audio(test_notebook_id, public=False)
-        assert isinstance(result, dict)
-        assert result["public"] is False
-
-    @pytest.mark.asyncio
-    @pytest.mark.golden
-    async def test_share_video(self, client, test_notebook_id):
-        """Read-only test - checks video share status."""
-        result = await client.artifacts.share_video(test_notebook_id, public=False)
-        assert isinstance(result, dict)
-        assert result["public"] is False
-
-    @pytest.mark.asyncio
-    @pytest.mark.golden
-    async def test_share_generic(self, client, test_notebook_id):
-        """Read-only test - checks generic share method."""
-        result = await client.artifacts.share(test_notebook_id, public=False)
-        assert isinstance(result, dict)
-        assert result["public"] is False

@@ -77,7 +77,9 @@ class RPCMethod(str, Enum):
 
     # Sharing operations
     SHARE_ARTIFACT = "RGP97b"  # Share any artifact (audio, video, report, quiz, flashcards)
-    SHARE_PROJECT = "QDyure"
+    SHARE_PROJECT = "QDyure"  # Set notebook visibility (restricted/anyone with link)
+    GET_SHARE_STATUS = "JFMDGd"  # Get notebook share settings
+    # Note: SET_SHARE_ACCESS uses RENAME_NOTEBOOK (s0tc2d) with different params
 
     # Additional notebook operations
     LIST_FEATURED_PROJECTS = "nS9Qlc"

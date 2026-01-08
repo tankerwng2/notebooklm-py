@@ -228,23 +228,68 @@ class NotebooksAPI:
         )
 
     async def share(
-        self, notebook_id: str, settings: Optional[dict] = None
-    ) -> Any:
-        """Share notebook with specified settings.
+        self, notebook_id: str, public: bool = True, artifact_id: Optional[str] = None
+    ) -> dict:
+        """Toggle notebook sharing.
+
+        Sharing is a NOTEBOOK-LEVEL setting. When enabled, ALL artifacts in the
+        notebook become accessible via their URLs.
 
         Args:
             notebook_id: The notebook ID.
-            settings: Optional sharing settings dict.
+            public: If True, enable sharing. If False, disable sharing.
+            artifact_id: Optional artifact ID for generating a deep-link URL.
 
         Returns:
-            Sharing configuration result.
+            Dict with 'public' status, 'url', and 'artifact_id'.
         """
-        params = [notebook_id, settings or {}]
-        return await self._core.rpc_call(
-            RPCMethod.SHARE_PROJECT,
+        share_options = [1] if public else [0]
+        if artifact_id:
+            params = [share_options, notebook_id, artifact_id]
+        else:
+            params = [share_options, notebook_id]
+
+        await self._core.rpc_call(
+            RPCMethod.SHARE_ARTIFACT,
             params,
+            source_path=f"/notebook/{notebook_id}",
             allow_null=True,
         )
+
+        # Build share URL
+        base_url = f"https://notebooklm.google.com/notebook/{notebook_id}"
+        if public and artifact_id:
+            url = f"{base_url}?artifactId={artifact_id}"
+        elif public:
+            url = base_url
+        else:
+            url = None
+
+        return {
+            "public": public,
+            "url": url,
+            "artifact_id": artifact_id,
+        }
+
+    def get_share_url(
+        self, notebook_id: str, artifact_id: Optional[str] = None
+    ) -> str:
+        """Get share URL for a notebook or artifact.
+
+        This does NOT toggle sharing - it just returns the URL format.
+        Use share() to enable/disable sharing.
+
+        Args:
+            notebook_id: The notebook ID.
+            artifact_id: Optional artifact ID for a deep-link URL.
+
+        Returns:
+            The share URL string.
+        """
+        base_url = f"https://notebooklm.google.com/notebook/{notebook_id}"
+        if artifact_id:
+            return f"{base_url}?artifactId={artifact_id}"
+        return base_url
 
     async def get_analytics(self, notebook_id: str) -> Any:
         """Get analytics and metadata for a notebook.

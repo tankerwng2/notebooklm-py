@@ -19,7 +19,7 @@
 | `wXbhsf` | LIST_NOTEBOOKS | List all notebooks | `_notebooks.py` |
 | `CCqFvf` | CREATE_NOTEBOOK | Create new notebook | `_notebooks.py` |
 | `rLM1Ne` | GET_NOTEBOOK | Get notebook details + sources | `_notebooks.py` |
-| `s0tc2d` | RENAME_NOTEBOOK | Rename + configure chat settings | `_notebooks.py`, `_chat.py` |
+| `s0tc2d` | RENAME_NOTEBOOK | Rename, chat config, share access | `_notebooks.py`, `_chat.py` |
 | `WWINqb` | DELETE_NOTEBOOK | Delete a notebook | `_notebooks.py` |
 | `izAoDd` | ADD_SOURCE | Add URL/text/YouTube source | `_sources.py` |
 | `o4cbdc` | ADD_SOURCE_FILE | Register uploaded file | `_sources.py` |
@@ -44,9 +44,10 @@
 | `LBwxtb` | IMPORT_RESEARCH | Import research results | `_research.py` |
 | `rc3d8d` | RENAME_ARTIFACT | Rename artifact | `_artifacts.py` |
 | `Krh3pd` | EXPORT_ARTIFACT | Export to Docs/Sheets | `_artifacts.py` |
-| `RGP97b` | SHARE_ARTIFACT | Share artifact (audio, video, report, quiz, flashcards) | `_artifacts.py` |
+| `RGP97b` | SHARE_ARTIFACT | Toggle notebook sharing | `_notebooks.py` |
 | `nS9Qlc` | LIST_FEATURED_PROJECTS | List featured notebooks | `_notebooks.py` |
-| `QDyure` | SHARE_PROJECT | Share notebook | `_notebooks.py` |
+| `QDyure` | SHARE_PROJECT | Set notebook visibility (restricted/public) | `_notebooks.py` |
+| `JFMDGd` | GET_SHARE_STATUS | Get notebook share settings | Not implemented |
 | `ciyUvf` | GET_SUGGESTED_REPORTS | Get AI-suggested report formats | `_artifacts.py` |
 
 ### Content Type Codes (StudioContentType)
@@ -875,18 +876,87 @@ params = [
 ]
 ```
 
+### RPC: GET_SHARE_STATUS (JFMDGd)
+
+**Source:** Not yet implemented
+
+Get the current share settings for a notebook.
+
+```python
+params = [
+    notebook_id,  # 0: Notebook ID
+    [2],          # 1: Fixed flag
+]
+
+# Response: Share status information
+```
+
 ### RPC: SHARE_PROJECT (QDyure)
 
 **Source:** `_notebooks.py::share()`
 
-Share notebook with specified settings.
+Set notebook visibility (restricted vs anyone with link).
 
 ```python
+# visibility: [0] = restricted, [1] = anyone with link
+# access: [0, ""] = chat only?, [1, ""] = full notebook?
+
 params = [
-    notebook_id,   # 0: Notebook ID
-    settings,      # 1: Sharing settings dict (or {})
+    [
+        [
+            notebook_id,  # Notebook ID
+            None,
+            visibility,   # [0]=restricted, [1]=public link
+            access,       # [0, ""] or [1, ""] - access level
+        ]
+    ],
+    1,            # Fixed value
+    None,
+    [2],          # Fixed flag
 ]
 ```
+
+### RPC: SET_SHARE_ACCESS (via RENAME_NOTEBOOK s0tc2d)
+
+**Source:** Not yet implemented (same RPC ID as RENAME_NOTEBOOK)
+
+Set viewer access level (chat only vs full notebook).
+
+**Note:** This uses the same RPC ID as RENAME_NOTEBOOK (`s0tc2d`) but with different parameter structure.
+
+```python
+# The access toggle is at index [8] in a deeply nested array
+params = [
+    notebook_id,  # 0: Notebook ID
+    [
+        [
+            None, None, None, None,   # indices 0-3
+            None, None, None, None,   # indices 4-7
+            [[access_level]],         # index 8: [[1]] for chat only?
+        ]
+    ],
+]
+```
+
+### Notebook Sharing Overview
+
+**Sharing is a notebook-level setting.** When you share a notebook, ALL artifacts become accessible.
+
+Notebooks have **two independent sharing toggles**:
+
+1. **Visibility** (SHARE_PROJECT - QDyure or SHARE_ARTIFACT - RGP97b):
+   - `[0]` = Restricted (only specific people)
+   - `[1]` = Anyone with the link
+
+2. **Access Level** (SET_SHARE_ACCESS - s0tc2d):
+   - `[[1]]` = Chat only (viewers can only use chat)
+   - Other = Full notebook access
+
+**Share URLs:**
+- Notebook: `https://notebooklm.google.com/notebook/{notebook_id}`
+- Artifact deep-link: `https://notebooklm.google.com/notebook/{notebook_id}?artifactId={artifact_id}`
+
+The `?artifactId=xxx` parameter creates a deep link that opens the notebook and navigates to that specific artifact. Mind Maps cannot be shared (no public URLs).
 
 ---
 
@@ -1131,24 +1201,19 @@ await rpc_call(
 
 ### RPC: SHARE_ARTIFACT (RGP97b)
 
-**Source:** `_artifacts.py::share()`
+**Source:** `_notebooks.py::share()`
 
-Share an artifact. Shareable artifacts include: Audio, Video, Reports, Quiz, and Flashcards.
-Note: Mind Maps are NOT shareable.
+Toggle notebook sharing. **Sharing is a notebook-level setting** - when enabled, ALL artifacts in the notebook become accessible via their URLs.
+
+Note: Mind Maps are NOT shareable (they don't have public URLs).
 
 ```python
 # share_options: [1] for public, [0] for private
-# For audio/video (one per notebook), artifact_id is optional:
+# artifact_id is optional - used to generate a deep-link URL to that specific artifact
 params = [
     share_options,  # 0: [1] for public link, [0] for private
     notebook_id,    # 1: Notebook ID
-]
-
-# For reports/quizzes/flashcards (multiple per notebook), include artifact_id:
-params = [
-    share_options,  # 0: [1] for public link, [0] for private
-    notebook_id,    # 1: Notebook ID
-    artifact_id,    # 2: Artifact ID
+    artifact_id,    # 2: Optional - artifact ID for deep-link URL
 ]
 
 # Called with source_path:
@@ -1158,8 +1223,12 @@ await rpc_call(
     source_path=f"/notebook/{notebook_id}",
 )
 
-# Response: Share result with link information
+# Share URL format:
+# - Notebook: https://notebooklm.google.com/notebook/{notebook_id}
+# - Artifact deep-link: https://notebooklm.google.com/notebook/{notebook_id}?artifactId={artifact_id}
 ```
+
+**Important:** The `?artifactId=xxx` URL is a **deep link** - it opens the shared notebook and navigates to that artifact. The artifact itself isn't independently shared.
 
 ### RPC: GET_SUGGESTED_REPORTS (ciyUvf)
 

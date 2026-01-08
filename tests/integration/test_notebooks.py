@@ -279,20 +279,20 @@ class TestNotebooksAPIAdditional:
         httpx_mock: HTTPXMock,
         build_rpc_response,
     ):
-        """Test sharing a notebook with settings."""
+        """Test sharing a notebook."""
         response = build_rpc_response(
-            RPCMethod.SHARE_PROJECT,
-            ["https://notebooklm.google.com/notebook/abc123?share=true"],
+            RPCMethod.SHARE_ARTIFACT,
+            None,  # Share returns null, we build the URL
         )
         httpx_mock.add_response(content=response.encode())
 
         async with NotebookLMClient(auth_tokens) as client:
-            # share() takes settings dict, not public=True
-            result = await client.notebooks.share("nb_123", settings={"public": True})
+            result = await client.notebooks.share("nb_123", public=True)
 
-        assert result is not None
+        assert result["public"] is True
+        assert "nb_123" in result["url"]
         request = httpx_mock.get_request()
-        assert RPCMethod.SHARE_PROJECT in str(request.url)
+        assert RPCMethod.SHARE_ARTIFACT.value in str(request.url)
 
     @pytest.mark.asyncio
     async def test_get_summary_additional(

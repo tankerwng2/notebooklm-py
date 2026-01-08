@@ -40,7 +40,7 @@ notebooklm [--storage PATH] [--version] <command> [OPTIONS] [ARGS]
 | `create <title>` | Create notebook | `notebooklm create "Research"` |
 | `delete <id>` | Delete notebook | `notebooklm delete abc123` |
 | `rename <title>` | Rename current notebook | `notebooklm rename "New Title"` |
-| `share` | Configure sharing | `notebooklm share` |
+| `share` | Toggle notebook sharing | `notebooklm share` or `notebooklm share --revoke` |
 | `featured` | List public notebooks | `notebooklm featured` |
 | `summary` | Get AI summary | `notebooklm summary` |
 | `analytics` | Get usage stats | `notebooklm analytics` |
@@ -97,7 +97,6 @@ notebooklm [--storage PATH] [--version] <command> [OPTIONS] [ARGS]
 | `delete <id>` | Artifact ID | - | `artifact delete art123` |
 | `export <id>` | Artifact ID | - | `artifact export art123` |
 | `poll <task_id>` | Task ID | - | `artifact poll task123` |
-| `share` | - | `--enable/--disable` | `artifact share --enable` |
 | `suggestions` | - | - | `artifact suggestions` |
 
 ### Download Commands (`notebooklm download <type>`)
