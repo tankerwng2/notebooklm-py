@@ -3,14 +3,14 @@
 **Status:** Active
 **Last Updated:** 2026-01-07
 
-How to run tests, write new tests, and handle E2E authentication.
+How to run tests, write new tests, and work with E2E fixtures.
 
 ## Running Tests
 
 ### Quick Start
 
 ```bash
-# Activate virtual environment first
+# Activate virtual environment
 source .venv/bin/activate
 
 # Run all tests (excludes E2E by default)
@@ -21,15 +21,9 @@ pytest -v
 
 # Run with coverage
 pytest --cov
-
-# Run specific file
-pytest tests/unit/test_decoder.py
-
-# Run specific test
-pytest tests/unit/test_decoder.py::test_decode_simple_response
 ```
 
-### Test Categories
+### By Category
 
 ```bash
 # Unit tests only
@@ -41,363 +35,244 @@ pytest tests/integration/
 # E2E tests (requires authentication)
 pytest tests/e2e/ -m e2e
 
-# Slow tests (audio/video generation)
+# E2E without slow tests (quick validation)
+pytest tests/e2e/ -m "e2e and not slow"
+
+# Golden notebook tests only (read-only, safe)
+pytest tests/e2e/ -m golden
+```
+
+### By Marker
+
+```bash
+# Slow tests (generation, 15+ seconds each)
 pytest -m slow
 
-# Skip slow tests
+# Exhaustive tests (all parameter variants)
+pytest -m exhaustive
+
+# Skip slow tests for quick iteration
 pytest -m "not slow"
+
+# Stable tests only (consistently pass)
+pytest -m stable
 ```
 
 ## Test Structure
 
 ```
 tests/
-├── conftest.py          # Shared fixtures
-├── unit/                # Unit tests (no network)
-│   ├── test_decoder.py
-│   ├── test_encoder.py
-│   ├── test_auth.py
-│   └── test_cli_*.py
-├── integration/         # Integration tests (mocked HTTP)
+├── conftest.py              # Shared fixtures (RPC response builders)
+├── unit/                    # Unit tests (no network, fast)
+│   ├── cli/                 # CLI command tests
+│   │   ├── test_artifact.py
+│   │   ├── test_download.py
+│   │   ├── test_generate.py
+│   │   ├── test_notebook.py
+│   │   ├── test_session.py
+│   │   ├── test_source.py
+│   │   └── ...
+│   ├── test_decoder.py      # RPC response decoding
+│   ├── test_encoder.py      # RPC request encoding
+│   ├── test_auth.py         # Authentication logic
+│   ├── test_types.py        # Dataclass parsing
+│   └── ...
+├── integration/             # Integration tests (mocked HTTP)
+│   ├── conftest.py          # Mock auth, response builders
 │   ├── test_notebooks.py
 │   ├── test_sources.py
-│   └── test_artifacts.py
-└── e2e/                 # End-to-end tests (real API)
-    ├── conftest.py      # E2E fixtures
-    ├── test_notebooks_e2e.py
-    ├── test_sources_e2e.py
-    └── test_artifacts_e2e.py
+│   ├── test_artifacts.py
+│   ├── test_chat.py
+│   └── ...
+└── e2e/                     # End-to-end tests (real API)
+    ├── conftest.py          # Auth, fixtures, cleanup
+    ├── test_notebooks.py    # CRUD operations
+    ├── test_sources.py      # Source management
+    ├── test_artifacts.py    # Artifact generation
+    ├── test_audio_video.py  # Audio/video generation
+    ├── test_downloads.py    # Download operations
+    ├── test_research.py     # Research mode
+    └── ...
 ```
 
-## Writing Unit Tests
+## Test Categories
 
-Unit tests should be fast and not require network access.
+### Unit Tests
 
-### Testing RPC Encoding
+Fast tests with no network access. Test individual functions in isolation.
 
-```python
-import pytest
-from notebooklm.rpc import encode_rpc_request, RPCMethod
-
-def test_encode_list_notebooks():
-    params = [None, 1, None, [2]]
-    result = encode_rpc_request(RPCMethod.LIST_NOTEBOOKS, params)
-
-    assert RPCMethod.LIST_NOTEBOOKS in result
-    assert "[null,1,null,[2]]" in result
-```
-
-### Testing RPC Decoding
+**What to test:**
+- RPC encoding/decoding
+- Dataclass parsing (`Notebook.from_api_response()`)
+- Authentication token extraction
+- CLI argument parsing
+- Utility functions
 
 ```python
-import pytest
-from notebooklm.rpc import decode_response
-
-def test_decode_simple_response():
-    raw = ''')]}\'
-
+# tests/unit/test_decoder.py
+def test_decode_notebook_response():
+    raw = ''')}]'
 123
-["wrb.fr","wXbhsf","[[\\"id\\",\\"title\\"]]",null,null,null,"generic"]
+["wrb.fr","abc123","[[\\"nb1\\",\\"Title\\"]]",null,null,null,"generic"]
 '''
-    result = decode_response(raw, "wXbhsf")
-    assert result == [["id", "title"]]
+    result = decode_response(raw, "abc123")
+    assert result == [["nb1", "Title"]]
 ```
 
-### Testing Dataclass Parsing
+### Integration Tests
+
+Test full method flows with mocked HTTP responses.
+
+**What to test:**
+- Client method behavior
+- Response parsing into dataclasses
+- Error handling
 
 ```python
-import pytest
-from notebooklm.types import Notebook
-
-def test_notebook_from_api_response():
-    raw_data = ["nb123", "My Notebook", None, [[1704067200]], 5]
-
-    nb = Notebook.from_api_response(raw_data)
-
-    assert nb.id == "nb123"
-    assert nb.title == "My Notebook"
-    assert nb.sources_count == 5
-```
-
-## Writing Integration Tests
-
-Integration tests mock HTTP responses but test full method flow.
-
-### Mocking RPC Calls
-
-```python
-import pytest
-from unittest.mock import AsyncMock, patch
-from notebooklm import NotebookLMClient, AuthTokens
-
-@pytest.fixture
-def mock_auth():
-    return AuthTokens(
-        cookies={"SID": "test"},
-        csrf_token="test_csrf",
-        session_id="test_sid"
-    )
-
+# tests/integration/test_notebooks.py
 @pytest.mark.asyncio
-async def test_list_notebooks(mock_auth):
-    # Expected API response structure
-    mock_response = [[
-        ["nb1", "Notebook 1", None, [[1234567890]], 3],
-        ["nb2", "Notebook 2", None, [[1234567891]], 0],
-    ]]
-
-    with patch('notebooklm._core.ClientCore.rpc_call', new_callable=AsyncMock) as mock:
-        mock.return_value = mock_response
-
-        client = NotebookLMClient(mock_auth)
-        client._core._is_open = True  # Skip actual connection
-
-        notebooks = await client.notebooks.list()
-
-        assert len(notebooks) == 2
-        assert notebooks[0].title == "Notebook 1"
-        mock.assert_called_once()
-```
-
-### Mocking HTTP Responses
-
-```python
-import pytest
-import httpx
-from pytest_httpx import HTTPXMock
-
-@pytest.mark.asyncio
-async def test_full_request_flow(httpx_mock: HTTPXMock, mock_auth):
-    # Mock the batchexecute response
+async def test_list_notebooks(httpx_mock, auth_tokens, build_rpc_response):
+    # Mock the API response
     httpx_mock.add_response(
         url__regex=r".*/batchexecute.*",
-        text=''')]}\'
-
-100
-["wrb.fr","wXbhsf","[[\\"nb1\\",\\"Test\\"]]",null,null,null,"generic"]
-'''
+        text=build_rpc_response(
+            RPCMethod.LIST_NOTEBOOKS,
+            [[["Title", [], "nb_001", "📘", None, [None, None, None, None, None, [1704067200, 0]]]]]
+        )
     )
 
-    async with NotebookLMClient(mock_auth) as client:
+    async with NotebookLMClient(auth_tokens) as client:
         notebooks = await client.notebooks.list()
         assert len(notebooks) == 1
+        assert notebooks[0].id == "nb_001"
 ```
 
-## Writing E2E Tests
+### E2E Tests
 
-E2E tests run against the real API. They require authentication.
+Test against the real NotebookLM API. Requires authentication.
 
-### E2E Test Setup
+**What to test:**
+- Real API contract validation
+- End-to-end workflows
+- Download operations
 
 ```bash
-# First, authenticate
+# Setup: Authenticate first
 notebooklm login
 
-# Then run E2E tests
+# Run E2E tests
 pytest tests/e2e/ -m e2e -v
 ```
 
-### E2E Test Structure
+## E2E Fixture Strategy
 
-```python
-import pytest
-from notebooklm import NotebookLMClient
-
-pytestmark = [
-    pytest.mark.e2e,
-    pytest.mark.asyncio,
-]
-
-@pytest.fixture
-async def client():
-    """Create authenticated client."""
-    async with await NotebookLMClient.from_storage() as c:
-        yield c
-
-@pytest.fixture
-async def test_notebook(client):
-    """Create a test notebook, cleanup after."""
-    nb = await client.notebooks.create("E2E Test")
-    yield nb
-    await client.notebooks.delete(nb.id)
-
-async def test_create_and_list_notebook(client, test_notebook):
-    notebooks = await client.notebooks.list()
-    ids = [n.id for n in notebooks]
-    assert test_notebook.id in ids
-```
-
-### Marking Tests
-
-```python
-import pytest
-
-# Basic E2E marker
-@pytest.mark.e2e
-async def test_basic():
-    ...
-
-# Slow test (audio/video generation)
-@pytest.mark.e2e
-@pytest.mark.slow
-async def test_generate_audio():
-    ...
-
-# Expected to fail (known issue)
-@pytest.mark.e2e
-@pytest.mark.xfail(reason="Rate limiting")
-async def test_bulk_operations():
-    ...
-```
-
-### E2E Best Practices
-
-1. **Clean up resources**: Use fixtures that delete test notebooks
-2. **Use unique names**: Include timestamp in notebook titles
-3. **Handle rate limits**: Add delays between tests
-4. **Mark flaky tests**: Use `xfail` for known unreliable tests
-5. **Don't test destructive operations**: Avoid testing delete on real data
-
-## E2E Fixture Strategy: Golden vs Temporary Notebooks
-
-E2E tests use different notebook types depending on what they need to test. Understanding when to use each is critical for writing effective tests.
+E2E tests use a tiered fixture system to balance coverage, speed, and quota usage.
 
 ### The Problem
 
-NotebookLM has several constraints that make naive E2E testing problematic:
+NotebookLM has constraints that make naive testing problematic:
 
-1. **Artifact generation is slow** - Audio takes 2-5 minutes, video even longer
-2. **Rate limiting is aggressive** - Too many operations trigger throttling
-3. **Source processing takes time** - URLs/files need time to be indexed
-4. **Cleanup failures leave debris** - Failed tests can leave notebooks behind
+1. **Generation is slow** - Audio takes 2-5 minutes, video even longer
+2. **Rate limiting** - Too many operations trigger throttling
+3. **Source processing** - URLs need time to be indexed
+4. **Cleanup failures** - Failed tests can leave orphaned notebooks
 
 ### The Solution: Tiered Fixtures
 
-We use different fixture types for different test needs:
+| Fixture | Scope | Purpose | Creates Resources? |
+|---------|-------|---------|-------------------|
+| `test_notebook_id` | function | Read-only operations | No - uses golden notebook |
+| `temp_notebook` | function | Isolated CRUD tests | Yes - auto-cleanup |
+| `test_workspace` | session | Generation tests | Yes - session cleanup |
 
-| Fixture | Scope | Use Case | Creates Resources? |
-|---------|-------|----------|-------------------|
-| `test_notebook_id` | session | Read-only tests, download tests | No - uses golden notebook |
-| `temp_notebook` | function | Mutation tests (CRUD) | Yes - auto-cleanup |
-| `test_workspace` | session | Generation tests that need writable notebook | Yes - session cleanup |
+### Golden Notebook (`test_notebook_id`)
 
-**Key distinction:**
-- `test_notebook_id` → Points to **golden notebook** (read-only, pre-populated with artifacts)
-- `test_workspace` → Creates a **writable notebook** with sample content for generation tests
+Google's shared demo notebook with pre-seeded content and artifacts.
 
-### Golden Notebook (`golden_notebook_id`)
-
-**What it is:** Google's shared demo notebook (`19bde485-a9c1-4809-8884-e872b2b67b44`) that comes pre-seeded with sources and artifacts.
-
-**Rationale:**
-- **Pre-existing artifacts**: Has audio, video, quiz, flashcards, slide decks, mind maps already generated
-- **No generation wait**: Tests can immediately verify download/export without waiting for generation
-- **Always available**: Doesn't depend on test setup succeeding
-- **Rate limit friendly**: No API calls needed to set up content
+**ID:** `19bde485-a9c1-4809-8884-e872b2b67b44`
 
 **Use for:**
-- Download tests (`test_download_audio`, `test_download_video`)
-- Read-only list operations (`test_list_sources`, `test_list_artifacts`)
-- Source guide/summary retrieval
-- Any test marked `@pytest.mark.golden`
+- Download tests (audio, video, slides already exist)
+- List operations (sources, artifacts)
+- Read-only queries
+- Tests marked `@pytest.mark.golden`
 
 ```python
 @pytest.mark.golden
-async def test_download_audio(self, client, test_notebook_id):
-    """Downloads existing audio artifact - read-only."""
-    # test_notebook_id defaults to golden notebook
-    result = await client.artifacts.download_audio(test_notebook_id, output_path)
+async def test_list_artifacts(self, client, test_notebook_id):
+    """Read-only - uses golden notebook."""
+    artifacts = await client.artifacts.list(test_notebook_id)
+    assert isinstance(artifacts, list)
 ```
+
+**Why:** Pre-existing artifacts mean no generation wait. Always available, no setup needed.
 
 ### Temporary Notebook (`temp_notebook`)
 
-**What it is:** A fresh notebook created for a single test, automatically deleted after.
-
-**Rationale:**
-- **Isolation**: Each test gets clean state, no interference
-- **Safe mutations**: Can create/delete sources, notes, artifacts freely
-- **Automatic cleanup**: Fixture handles deletion even if test fails
+Fresh notebook per test, automatically deleted.
 
 **Use for:**
-- Source CRUD tests (add, rename, delete)
-- Note CRUD tests
-- Tests that modify notebook state
-- Tests that need predictable initial state
+- Source CRUD (add, rename, delete)
+- Note CRUD
+- Artifact deletion tests
+- Tests needing isolated state
 
 ```python
 async def test_add_and_delete_source(self, client, temp_notebook):
-    """Test source lifecycle - needs owned notebook."""
+    """CRUD needs owned notebook."""
     source = await client.sources.add_url(temp_notebook.id, "https://example.com")
-    await client.sources.delete(temp_notebook.id, source.id)
+    deleted = await client.sources.delete(temp_notebook.id, source.id)
+    assert deleted is True
 ```
+
+**Why:** Isolation prevents test interference. Cleanup on failure prevents debris.
 
 ### Test Workspace (`test_workspace`)
 
-**What it is:** A session-scoped writable notebook with pre-seeded content, suitable for generation tests.
-
-**Rationale:**
-- **Writable**: Unlike golden notebook, you can trigger generation operations
-- **Has content**: Pre-populated with sources so generation can work
-- **Session-scoped**: Created once per test session, not per test (saves time/quota)
-- **Shared**: Multiple tests use the same workspace
+Session-scoped writable notebook with pre-seeded content.
 
 **Use for:**
-- Artifact generation tests (audio, video, quiz, etc.)
-- Tests that need to write but don't need isolation
-
-**Why not golden notebook for generation?**
-The golden notebook is read-only. Attempting to generate artifacts on it fails because you don't own it. Generation tests need a writable notebook.
-
-**Why not temp_notebook for generation?**
-Creating a fresh notebook per test would:
-1. Waste time on setup/teardown
-2. Require adding sources each time (slow)
-3. Hit rate limits faster
+- Artifact generation tests
+- Tests that trigger generation but don't need isolation
 
 ```python
 @pytest.mark.slow
 async def test_generate_quiz(self, client, test_workspace):
-    """Generation needs writable notebook with content."""
+    """Generation needs writable notebook."""
     result = await client.artifacts.generate_quiz(test_workspace.id)
     assert result is not None
 ```
 
-### Why Not Just Create Fresh Notebooks for Everything?
+**Why golden doesn't work:** You can't generate artifacts on notebooks you don't own.
 
-1. **Generation tests would be too slow**: Creating audio from scratch takes 2-5 minutes. Using golden notebook's pre-existing artifacts makes download tests run in seconds.
+**Why not temp_notebook:** Creating fresh notebooks per generation test wastes time and quota.
 
-2. **Rate limiting would fail tests**: Creating notebooks, adding sources, and generating artifacts in every test would hit rate limits quickly.
+## Test Markers
 
-3. **Flakiness increases**: More setup = more failure points. Golden notebook eliminates setup failures for read-only tests.
+### Available Markers
 
-### Test Markers
+| Marker | Purpose | Default |
+|--------|---------|---------|
+| `e2e` | Requires real API | Excluded by pytest |
+| `slow` | Takes > 30 seconds | Included |
+| `exhaustive` | Parameter variant tests | Included |
+| `golden` | Uses golden notebook (read-only) | Included |
+| `stable` | Consistently passes | Included |
 
-Use markers to indicate fixture requirements:
+### Exhaustive Testing
 
-```python
-@pytest.mark.golden     # Uses golden notebook, read-only
-@pytest.mark.stable     # Reliable, should always pass
-@pytest.mark.slow       # Takes > 30 seconds (generation)
-@pytest.mark.exhaustive # Variant tests, excluded by default
-```
+Each artifact type has multiple parameter combinations. Testing all would burn quota.
 
-### Exhaustive Testing Strategy
-
-**The problem:** Each artifact type (audio, video, quiz, etc.) has multiple generation options (format, style, length). Testing every combination would:
-- Hit rate limits quickly
-- Take excessive time
-- Burn through quotas unnecessarily
-
-**The solution:** Tiered test coverage with `@pytest.mark.exhaustive`:
+**Solution:** One default test per type, variants marked `@pytest.mark.exhaustive`.
 
 ```python
-# DEFAULT: One test per artifact type - always runs
+# DEFAULT: Always runs
 @pytest.mark.slow
 async def test_generate_audio_default(self, client, test_workspace):
     result = await client.artifacts.generate_audio(test_workspace.id)
     assert result is not None
 
-# EXHAUSTIVE: Variant tests - only run when explicitly requested
+# EXHAUSTIVE: Only when explicitly requested
 @pytest.mark.slow
 @pytest.mark.exhaustive
 async def test_generate_audio_brief_short(self, client, test_workspace):
@@ -409,102 +284,119 @@ async def test_generate_audio_brief_short(self, client, test_workspace):
     assert result is not None
 ```
 
-**Running tests:**
-
+**Running:**
 ```bash
-# Normal run - one generation per type (quota-friendly)
+# Default (one per type)
 pytest tests/e2e -m "e2e and slow"
 
-# Full coverage - all variant combinations
+# All variants
 pytest tests/e2e -m "e2e and exhaustive"
 
-# Explicitly exclude exhaustive tests
+# Exclude variants
 pytest tests/e2e -m "e2e and not exhaustive"
-```
-
-**Why this approach:**
-1. **Catches regressions**: Default tests verify each artifact type still works
-2. **Saves quota**: Most bugs appear in the core generation logic, not option handling
-3. **Fast feedback**: CI runs complete in reasonable time
-4. **Full coverage available**: Run exhaustive tests before releases or after API changes
-
-### Environment Variables
-
-Override defaults for custom test setups:
-
-```bash
-# Use your own notebook instead of golden
-export NOTEBOOKLM_GOLDEN_NOTEBOOK_ID="your-notebook-id"
-
-# Use specific notebook for test_notebook_id fixture
-export NOTEBOOKLM_TEST_NOTEBOOK_ID="your-test-notebook-id"
 ```
 
 ## Fixtures Reference
 
-### `conftest.py` Fixtures
+### Root `conftest.py`
 
 ```python
 # tests/conftest.py
 
 @pytest.fixture
-def mock_auth():
-    """Mock authentication tokens."""
-    return AuthTokens(
-        cookies={"SID": "test", "HSID": "test"},
-        csrf_token="test_csrf",
-        session_id="test_sid"
-    )
-
-@pytest.fixture
-def mock_client(mock_auth):
-    """Create client with mocked auth."""
-    return NotebookLMClient(mock_auth)
-
-@pytest.fixture
-def sample_notebook_response():
-    """Sample API response for notebook list."""
-    return [[
-        ["nb123", "Test Notebook", None, [[1704067200]], 3, None, True],
-    ]]
+def build_rpc_response():
+    """Factory for building mock RPC responses."""
+    def _build(rpc_id: Union[RPCMethod, str], data) -> str:
+        rpc_id_str = rpc_id.value if isinstance(rpc_id, RPCMethod) else rpc_id
+        inner = json.dumps(data)
+        chunk = json.dumps(["wrb.fr", rpc_id_str, inner, None, None])
+        return f")]}}'\n{len(chunk)}\n{chunk}\n"
+    return _build
 ```
 
-### E2E Fixtures
+### Integration `conftest.py`
+
+```python
+# tests/integration/conftest.py
+
+@pytest.fixture
+def auth_tokens():
+    """Mock authentication tokens for integration tests."""
+    return AuthTokens(
+        cookies={"SID": "test_sid", "HSID": "test_hsid", ...},
+        csrf_token="test_csrf_token",
+        session_id="test_session_id",
+    )
+```
+
+### E2E `conftest.py`
 
 ```python
 # tests/e2e/conftest.py
 
 @pytest.fixture(scope="session")
-def event_loop():
-    """Create event loop for session-scoped fixtures."""
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
+def auth_tokens(auth_cookies) -> AuthTokens:
+    """Fetch real auth tokens from stored cookies."""
+    # Fetches CSRF and session ID from NotebookLM homepage
+    ...
+
+@pytest.fixture
+async def client(auth_tokens) -> AsyncGenerator[NotebookLMClient, None]:
+    """Authenticated client for each test."""
+    async with NotebookLMClient(auth_tokens) as c:
+        yield c
+
+@pytest.fixture
+def test_notebook_id(golden_notebook_id):
+    """Notebook ID for read-only tests. Defaults to golden."""
+    return os.environ.get("NOTEBOOKLM_TEST_NOTEBOOK_ID", golden_notebook_id)
+
+@pytest.fixture
+async def temp_notebook(client, created_notebooks, cleanup_notebooks):
+    """Fresh notebook with auto-cleanup."""
+    notebook = await client.notebooks.create(f"Test-{uuid4().hex[:8]}")
+    created_notebooks.append(notebook.id)
+    return notebook
 
 @pytest.fixture(scope="session")
-async def auth_client():
-    """Session-scoped authenticated client."""
-    async with await NotebookLMClient.from_storage() as client:
-        yield client
+async def test_workspace(auth_tokens) -> AsyncGenerator:
+    """Session-scoped workspace with content for generation tests."""
+    async with NotebookLMClient(auth_tokens) as client:
+        notebook = await client.notebooks.create(f"E2E-Workspace-{uuid4().hex[:8]}")
+        await client.sources.add_text(notebook.id, title="Test Content", content="...")
+        await asyncio.sleep(2.0)  # Wait for source processing
+        yield notebook
+        await client.notebooks.delete(notebook.id)
+```
+
+## Environment Variables
+
+Override fixture defaults for custom setups:
+
+```bash
+# Use your own golden notebook
+export NOTEBOOKLM_GOLDEN_NOTEBOOK_ID="your-notebook-id"
+
+# Use specific notebook for test_notebook_id
+export NOTEBOOKLM_TEST_NOTEBOOK_ID="your-notebook-id"
 ```
 
 ## CLI Testing
 
-### Testing CLI Commands
+CLI tests live in `tests/unit/cli/` and use Click's test runner.
 
 ```python
+# tests/unit/cli/test_notebook.py
 from click.testing import CliRunner
-from notebooklm.notebooklm_cli import cli
+from notebooklm.cli import cli
 
 def test_list_command(mocker):
+    mock_notebooks = [Notebook(id="nb1", title="Test", sources_count=0)]
+
     # Mock the async client
-    mock_notebooks = [
-        Notebook(id="nb1", title="Test", sources_count=0)
-    ]
-    mocker.patch(
-        'notebooklm.cli.notebook.get_client',
-        return_value=AsyncMock(notebooks=AsyncMock(list=AsyncMock(return_value=mock_notebooks)))
-    )
+    mock_client = AsyncMock()
+    mock_client.notebooks.list = AsyncMock(return_value=mock_notebooks)
+    mocker.patch('notebooklm.cli.helpers.get_client', return_value=mock_client)
 
     runner = CliRunner()
     result = runner.invoke(cli, ['list'])
@@ -515,34 +407,42 @@ def test_list_command(mocker):
 
 ## Coverage
 
-### Running with Coverage
-
 ```bash
-# Generate coverage report
+# Generate HTML report
 pytest --cov=notebooklm --cov-report=html
 
 # View report
 open htmlcov/index.html
 ```
 
-### Coverage Goals
-
+**Goals:**
 - Unit tests: High coverage of encoding/decoding/parsing
-- Integration tests: Cover all API methods
-- E2E tests: Smoke tests for critical paths
+- Integration: Cover all client methods
+- E2E: Smoke tests for critical paths
 
-## Continuous Integration
+## Writing New Tests
 
-Tests run automatically on PR. E2E tests require secrets:
+### Decision Tree
 
-```yaml
-# GitHub Actions example
-- name: Run tests
-  run: pytest --ignore=tests/e2e
+1. **Does it need the network?**
+   - No → Unit test
+   - Mocked → Integration test
+   - Real API → E2E test
 
-- name: Run E2E tests
-  if: github.event_name == 'push'
-  env:
-    NOTEBOOKLM_STORAGE: ${{ secrets.NOTEBOOKLM_STORAGE }}
-  run: pytest tests/e2e -m e2e
-```
+2. **E2E: What notebook do I need?**
+   - Read-only → `test_notebook_id` (golden)
+   - CRUD operations → `temp_notebook`
+   - Generation → `test_workspace`
+
+3. **E2E: How long does it take?**
+   - < 5 seconds → No special marker
+   - 30+ seconds → `@pytest.mark.slow`
+   - Variant of slow test → `@pytest.mark.exhaustive`
+
+### Best Practices
+
+1. **Clean up resources** - Use fixtures with cleanup
+2. **Use unique names** - Include UUID in notebook titles
+3. **Don't test destructive ops on golden** - It's read-only anyway
+4. **Prefer golden for read tests** - No setup, always available
+5. **One assertion focus** - Each test validates one thing
