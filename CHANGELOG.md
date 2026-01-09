@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - macOS CI fix for Playwright version extraction (grep pattern anchoring)
 - Python 3.10 test compatibility with mock.patch resolution
 
-## [0.1.1] - 2025-01-08
+## [0.1.1] - 2026-01-08
 
 ### Added
 - `NOTEBOOKLM_HOME` environment variable for custom storage location
@@ -37,7 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Streamlined README
 - E2E test fixture documentation
 
-## [0.1.0] - 2025-01-06
+## [0.1.0] - 2026-01-06
 
 ### Added
 - Initial release of `notebooklm-py` - unofficial Python client for Google NotebookLM
