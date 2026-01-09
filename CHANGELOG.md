@@ -5,7 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0] - 2026-01-08
+## [Unreleased]
+
+### Added
+- **Ruff linter/formatter** - Added to development workflow with pre-commit hooks and CI integration
+- **Multi-version testing** - Docker-based test runner script for Python 3.10-3.14
+
+### Changed
+- **Python version support** - Now supports Python 3.10-3.14 (dropped 3.9)
+- **CI authentication** - Use `NOTEBOOKLM_AUTH_JSON` environment variable (inline JSON, no file writes)
+
+### Fixed
+- macOS CI fix for Playwright version extraction (grep pattern anchoring)
+- Python 3.10 test compatibility with mock.patch resolution
+
+## [0.1.1] - 2025-01-08
+
+### Added
+- `NOTEBOOKLM_HOME` environment variable for custom storage location
+- `NOTEBOOKLM_AUTH_JSON` environment variable for inline authentication (CI/CD friendly)
+- Claude Code skill installation via `notebooklm skill install`
+
+### Fixed
+- Infographic generation parameter structure
+- Mind map artifacts now persist as notes after generation
+- Artifact export with proper ExportType enum handling
+- Skill install path resolution for package data
+
+### Documentation
+- PyPI release checklist
+- Streamlined README
+- E2E test fixture documentation
+
+## [0.1.0] - 2025-01-06
 
 ### Added
 - Initial release of `notebooklm-py` - unofficial Python client for Google NotebookLM
@@ -62,4 +94,6 @@ This is the initial public release of `notebooklm-py`. While core functionality 
 - **Authentication expiry**: CSRF tokens expire after some time. Re-run `notebooklm login` if you encounter auth errors.
 - **Large file uploads**: Files over 50MB may fail or timeout. Split large documents if needed.
 
+[Unreleased]: https://github.com/teng-lin/notebooklm-py/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/teng-lin/notebooklm-py/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/teng-lin/notebooklm-py/releases/tag/v0.1.0

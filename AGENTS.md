@@ -16,7 +16,7 @@ pip install -e ".[all]"      # Install in dev mode
 
 ## Code Style Guidelines
 
-### Type Annotations (Python 3.9+)
+### Type Annotations (Python 3.10+)
 ```python
 def process(items: list[str]) -> dict[str, Any]: ...
 async def query(notebook_id: str, source_ids: Optional[list[str]] = None): ...

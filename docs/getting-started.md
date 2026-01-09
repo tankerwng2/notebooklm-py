@@ -1,13 +1,13 @@
 # Getting Started
 
 **Status:** Active
-**Last Updated:** 2026-01-08
+**Last Updated:** 2026-01-09
 
 This guide walks you through installing and using `notebooklm-py` for the first time.
 
 ## Prerequisites
 
-- Python 3.9 or higher
+- Python 3.10 or higher
 - A Google account with access to [NotebookLM](https://notebooklm.google.com)
 
 ## Installation

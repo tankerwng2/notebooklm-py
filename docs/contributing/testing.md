@@ -447,7 +447,7 @@ The project has two CI workflows:
 Runs automatically on every push and PR:
 
 1. **Quality Job** - Ruff linting + mypy type checking (runs once)
-2. **Test Job** - Unit/integration tests on Ubuntu and macOS across Python 3.9-3.12
+2. **Test Job** - Unit/integration tests on Ubuntu and macOS across Python 3.10-3.14
 
 No setup required - this works out of the box.
 

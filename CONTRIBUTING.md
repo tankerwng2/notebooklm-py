@@ -11,6 +11,36 @@ playwright install chromium
 
 # Run tests
 pytest
+
+# Run linter
+ruff check src/ tests/
+
+# Run formatter
+ruff format src/ tests/
+```
+
+### Code Quality
+
+This project uses **ruff** for linting and formatting:
+
+```bash
+# Check for lint issues
+ruff check src/ tests/
+
+# Auto-fix lint issues
+ruff check --fix src/ tests/
+
+# Check formatting
+ruff format --check src/ tests/
+
+# Apply formatting
+ruff format src/ tests/
+```
+
+**Pre-commit hooks** (optional but recommended):
+```bash
+pip install pre-commit
+pre-commit install
 ```
 
 ### Pull Request Process
@@ -18,7 +48,9 @@ pytest
 1. Create a feature branch from `main`
 2. Make your changes with clear commit messages
 3. Ensure tests pass: `pytest`
-4. Submit a PR with a description of changes
+4. Ensure lint passes: `ruff check src/ tests/`
+5. Ensure formatting: `ruff format --check src/ tests/`
+6. Submit a PR with a description of changes
 
 ---
 
