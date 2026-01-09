@@ -21,8 +21,8 @@ SKILL_DEST = SKILL_DEST_DIR / "SKILL.md"
 def get_skill_source_content() -> Optional[str]:
     """Read the skill source file from package data."""
     try:
-        # Python 3.9+ way to read package data
-        return resources.files("notebooklm").joinpath("data", "SKILL.md").read_text()
+        # Python 3.9+ way to read package data (use / operator for path traversal)
+        return (resources.files("notebooklm") / "data" / "SKILL.md").read_text()
     except (FileNotFoundError, TypeError):
         return None
 
