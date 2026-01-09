@@ -201,13 +201,9 @@ class TestNotebookDelete:
 
             with (
                 patch("notebooklm.cli.helpers.get_context_path", return_value=context_file),
-                patch(
-                    "notebooklm.cli.notebook.get_current_notebook", return_value="nb_to_delete"
-                ),
+                patch("notebooklm.cli.notebook.get_current_notebook", return_value="nb_to_delete"),
                 patch("notebooklm.cli.notebook.clear_context"),
-                patch(
-                    "notebooklm.cli.helpers.fetch_tokens", new_callable=AsyncMock
-                ) as mock_fetch,
+                patch("notebooklm.cli.helpers.fetch_tokens", new_callable=AsyncMock) as mock_fetch,
             ):
                 mock_fetch.return_value = ("csrf", "session")
                 result = runner.invoke(cli, ["delete", "-n", "nb_to_delete", "-y"])
@@ -497,12 +493,13 @@ class TestNotebookAsk:
             mock_client.chat.get_history = AsyncMock(return_value=None)
             mock_client_cls.return_value = mock_client
 
-            with patch(
-                "notebooklm.cli.helpers.get_context_path",
-                return_value=Path("/nonexistent/context.json"),
-            ), patch(
-                "notebooklm.cli.helpers.fetch_tokens", new_callable=AsyncMock
-            ) as mock_fetch:
+            with (
+                patch(
+                    "notebooklm.cli.helpers.get_context_path",
+                    return_value=Path("/nonexistent/context.json"),
+                ),
+                patch("notebooklm.cli.helpers.fetch_tokens", new_callable=AsyncMock) as mock_fetch,
+            ):
                 mock_fetch.return_value = ("csrf", "session")
                 result = runner.invoke(cli, ["ask", "-n", "nb_123", "What is this?"])
 

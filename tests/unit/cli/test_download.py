@@ -70,14 +70,13 @@ class TestDownloadAudio:
             mock_client.artifacts.download_audio = mock_download_audio
             mock_client_cls.return_value = mock_client
 
-            with patch.object(
-                download_module, "fetch_tokens", new_callable=AsyncMock
-            ) as mock_fetch, patch.object(download_module, "load_auth_from_storage") as mock_load:
+            with (
+                patch.object(download_module, "fetch_tokens", new_callable=AsyncMock) as mock_fetch,
+                patch.object(download_module, "load_auth_from_storage") as mock_load,
+            ):
                 mock_load.return_value = {"SID": "test", "HSID": "test", "SSID": "test"}
                 mock_fetch.return_value = ("csrf", "session")
-                result = runner.invoke(
-                    cli, ["download", "audio", str(output_file), "-n", "nb_123"]
-                )
+                result = runner.invoke(cli, ["download", "audio", str(output_file), "-n", "nb_123"])
 
             assert result.exit_code == 0
             assert output_file.exists()
@@ -90,9 +89,10 @@ class TestDownloadAudio:
             )
             mock_client_cls.return_value = mock_client
 
-            with patch.object(
-                download_module, "fetch_tokens", new_callable=AsyncMock
-            ) as mock_fetch, patch.object(download_module, "load_auth_from_storage") as mock_load:
+            with (
+                patch.object(download_module, "fetch_tokens", new_callable=AsyncMock) as mock_fetch,
+                patch.object(download_module, "load_auth_from_storage") as mock_load,
+            ):
                 mock_load.return_value = {"SID": "test", "HSID": "test", "SSID": "test"}
                 mock_fetch.return_value = ("csrf", "session")
                 result = runner.invoke(cli, ["download", "audio", "--dry-run", "-n", "nb_123"])
@@ -106,9 +106,10 @@ class TestDownloadAudio:
             mock_client.artifacts.list = AsyncMock(return_value=[])
             mock_client_cls.return_value = mock_client
 
-            with patch.object(
-                download_module, "fetch_tokens", new_callable=AsyncMock
-            ) as mock_fetch, patch.object(download_module, "load_auth_from_storage") as mock_load:
+            with (
+                patch.object(download_module, "fetch_tokens", new_callable=AsyncMock) as mock_fetch,
+                patch.object(download_module, "load_auth_from_storage") as mock_load,
+            ):
                 mock_load.return_value = {"SID": "test", "HSID": "test", "SSID": "test"}
                 mock_fetch.return_value = ("csrf", "session")
                 result = runner.invoke(cli, ["download", "audio", "-n", "nb_123"])
@@ -139,14 +140,13 @@ class TestDownloadVideo:
             mock_client.artifacts.download_video = mock_download_video
             mock_client_cls.return_value = mock_client
 
-            with patch.object(
-                download_module, "fetch_tokens", new_callable=AsyncMock
-            ) as mock_fetch, patch.object(download_module, "load_auth_from_storage") as mock_load:
+            with (
+                patch.object(download_module, "fetch_tokens", new_callable=AsyncMock) as mock_fetch,
+                patch.object(download_module, "load_auth_from_storage") as mock_load,
+            ):
                 mock_load.return_value = {"SID": "test", "HSID": "test", "SSID": "test"}
                 mock_fetch.return_value = ("csrf", "session")
-                result = runner.invoke(
-                    cli, ["download", "video", str(output_file), "-n", "nb_123"]
-                )
+                result = runner.invoke(cli, ["download", "video", str(output_file), "-n", "nb_123"])
 
             assert result.exit_code == 0
             assert output_file.exists()
@@ -175,9 +175,10 @@ class TestDownloadInfographic:
             mock_client.artifacts.download_infographic = mock_download_infographic
             mock_client_cls.return_value = mock_client
 
-            with patch.object(
-                download_module, "fetch_tokens", new_callable=AsyncMock
-            ) as mock_fetch, patch.object(download_module, "load_auth_from_storage") as mock_load:
+            with (
+                patch.object(download_module, "fetch_tokens", new_callable=AsyncMock) as mock_fetch,
+                patch.object(download_module, "load_auth_from_storage") as mock_load,
+            ):
                 mock_load.return_value = {"SID": "test", "HSID": "test", "SSID": "test"}
                 mock_fetch.return_value = ("csrf", "session")
                 result = runner.invoke(
@@ -212,9 +213,10 @@ class TestDownloadSlideDeck:
             mock_client.artifacts.download_slide_deck = mock_download_slide_deck
             mock_client_cls.return_value = mock_client
 
-            with patch.object(
-                download_module, "fetch_tokens", new_callable=AsyncMock
-            ) as mock_fetch, patch.object(download_module, "load_auth_from_storage") as mock_load:
+            with (
+                patch.object(download_module, "fetch_tokens", new_callable=AsyncMock) as mock_fetch,
+                patch.object(download_module, "load_auth_from_storage") as mock_load,
+            ):
                 mock_load.return_value = {"SID": "test", "HSID": "test", "SSID": "test"}
                 mock_fetch.return_value = ("csrf", "session")
                 result = runner.invoke(
@@ -255,9 +257,10 @@ class TestDownloadFlags:
             mock_client.artifacts.download_audio = mock_download_audio
             mock_client_cls.return_value = mock_client
 
-            with patch.object(
-                download_module, "fetch_tokens", new_callable=AsyncMock
-            ) as mock_fetch, patch.object(download_module, "load_auth_from_storage") as mock_load:
+            with (
+                patch.object(download_module, "fetch_tokens", new_callable=AsyncMock) as mock_fetch,
+                patch.object(download_module, "load_auth_from_storage") as mock_load,
+            ):
                 mock_load.return_value = {"SID": "test"}
                 mock_fetch.return_value = ("csrf", "session")
                 result = runner.invoke(
@@ -291,9 +294,10 @@ class TestDownloadFlags:
             mock_client.artifacts.download_audio = mock_download_audio
             mock_client_cls.return_value = mock_client
 
-            with patch.object(
-                download_module, "fetch_tokens", new_callable=AsyncMock
-            ) as mock_fetch, patch.object(download_module, "load_auth_from_storage") as mock_load:
+            with (
+                patch.object(download_module, "fetch_tokens", new_callable=AsyncMock) as mock_fetch,
+                patch.object(download_module, "load_auth_from_storage") as mock_load,
+            ):
                 mock_load.return_value = {"SID": "test"}
                 mock_fetch.return_value = ("csrf", "session")
                 result = runner.invoke(
@@ -321,9 +325,10 @@ class TestDownloadFlags:
             mock_client.artifacts.download_audio = mock_download_audio
             mock_client_cls.return_value = mock_client
 
-            with patch.object(
-                download_module, "fetch_tokens", new_callable=AsyncMock
-            ) as mock_fetch, patch.object(download_module, "load_auth_from_storage") as mock_load:
+            with (
+                patch.object(download_module, "fetch_tokens", new_callable=AsyncMock) as mock_fetch,
+                patch.object(download_module, "load_auth_from_storage") as mock_load,
+            ):
                 mock_load.return_value = {"SID": "test"}
                 mock_fetch.return_value = ("csrf", "session")
                 result = runner.invoke(
@@ -346,9 +351,10 @@ class TestDownloadFlags:
 
             mock_client_cls.return_value = mock_client
 
-            with patch.object(
-                download_module, "fetch_tokens", new_callable=AsyncMock
-            ) as mock_fetch, patch.object(download_module, "load_auth_from_storage") as mock_load:
+            with (
+                patch.object(download_module, "fetch_tokens", new_callable=AsyncMock) as mock_fetch,
+                patch.object(download_module, "load_auth_from_storage") as mock_load,
+            ):
                 mock_load.return_value = {"SID": "test"}
                 mock_fetch.return_value = ("csrf", "session")
                 runner.invoke(

@@ -432,6 +432,4 @@ async def generation_notebook_id(client):
         try:
             await client.notebooks.delete(notebook_id)
         except Exception as e:
-            warnings.warn(
-                f"Failed to delete generation notebook {notebook_id}: {e}", stacklevel=2
-            )
+            warnings.warn(f"Failed to delete generation notebook {notebook_id}: {e}", stacklevel=2)

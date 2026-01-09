@@ -352,9 +352,13 @@ class TestRequireNotebook:
             assert result == "nb_context"
 
     def test_raises_system_exit_when_no_notebook(self, tmp_path):
-        with patch(
-            "notebooklm.cli.helpers.get_context_path", return_value=tmp_path / "nonexistent.json"
-        ), patch("notebooklm.cli.helpers.console"):
+        with (
+            patch(
+                "notebooklm.cli.helpers.get_context_path",
+                return_value=tmp_path / "nonexistent.json",
+            ),
+            patch("notebooklm.cli.helpers.console"),
+        ):
             with pytest.raises(SystemExit) as exc_info:
                 require_notebook(None)
             assert exc_info.value.code == 1

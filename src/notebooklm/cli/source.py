@@ -172,9 +172,7 @@ def source_add(ctx, content, notebook_id, source_type, title, mime_type, json_ou
                 try:
                     file_content = file_path.read_text(encoding="utf-8")
                 except UnicodeDecodeError:
-                    raise click.ClickException(
-                        f"File must be UTF-8 encoded: {content}"
-                    ) from None
+                    raise click.ClickException(f"File must be UTF-8 encoded: {content}") from None
                 file_title = title or file_path.name
             else:
                 detected_type = "file"
