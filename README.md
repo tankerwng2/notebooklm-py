@@ -36,16 +36,6 @@
 | **CLI** | Shell scripts, quick tasks, CI/CD automation |
 | **Agent Skills** | Claude Code, LLM agents, natural language automation |
 
-## Try It Now
-
-```bash
-pip install "notebooklm-py[browser]"
-notebooklm login                          # Browser auth (one-time)
-notebooklm create "Test" && notebooklm ask "Hello!"
-```
-
-See [Installation](#installation) for options or jump to [Quick Start](#quick-start).
-
 ## Installation
 
 ```bash
@@ -56,6 +46,7 @@ pip install notebooklm-py
 pip install "notebooklm-py[browser]"
 playwright install chromium
 ```
+See [Installation](#installation) for options or jump to [Quick Start](#quick-start).
 
 ## Quick Start
 
