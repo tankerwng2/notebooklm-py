@@ -95,7 +95,7 @@ See [Configuration](configuration.md) for details on environment variables and C
 | `flashcards [description]` | `--difficulty`, `--quantity`, `--wait` | `generate flashcards` |
 | `infographic [description]` | `--orientation`, `--detail`, `--wait` | `generate infographic` |
 | `data-table [description]` | `--wait` | `generate data-table` |
-| `mind-map` | `--wait` | `generate mind-map` |
+| `mind-map` | *(sync, no wait needed)* | `generate mind-map` |
 | `report [description]` | `--type`, `--wait` | `generate report --type study-guide` |
 
 ### Artifact Commands (`notebooklm artifact <cmd>`)
@@ -521,11 +521,11 @@ When using this CLI programmatically:
 
 1. **Two ways to specify notebooks**: Either use `notebooklm use <id>` to set context, OR pass `-n <id>` directly to commands. Most commands support `-n/--notebook` as an explicit override.
 
-2. **Generation timing varies widely**:
-   - **Quick** (`--wait` OK): mind-map, data-table, quiz, flashcards, reports (seconds to ~2 min)
-   - **Long** (avoid `--wait`): audio (5-15 min), video (10-30 min), infographics, slide-decks (3-8 min)
+2. **Generation commands are async by default** (except mind-map):
+   - `mind-map`: Synchronous, completes instantly (no `--wait` option)
+   - All others: Return immediately with task ID (default: `--no-wait`)
 
-   For long operations, start without `--wait`, then use `artifact wait <id>` in a background task or inform the user to check back later.
+   Avoid `--wait` for LLM agents—all async operations can take minutes to 30+ minutes. Use `artifact wait <id>` in a background task or inform the user to check back later.
 
 3. **Partial IDs work**: `notebooklm use abc` matches any notebook ID starting with "abc".
 
