@@ -13,7 +13,7 @@ Note:
     See docs/troubleshooting.md for guidance on handling API changes.
 """
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 
 # Public API: Authentication
 from .auth import DEFAULT_STORAGE_PATH, AuthTokens
