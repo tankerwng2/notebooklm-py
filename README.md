@@ -10,6 +10,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Tests](https://github.com/teng-lin/notebooklm-py/actions/workflows/test.yml/badge.svg)](https://github.com/teng-lin/notebooklm-py/actions/workflows/test.yml)
 
+**Source & Development**: <https://github.com/teng-lin/notebooklm-py>
+
 > **⚠️ Unofficial Library - Use at Your Own Risk**
 >
 > This library uses **undocumented Google APIs** that can change without notice.

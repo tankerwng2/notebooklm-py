@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-01-10
+
+### Fixed
+- **PyPI README links** - Documentation links now work correctly on PyPI
+  - Added `hatch-fancy-pypi-readme` plugin for build-time link transformation
+  - Relative links (e.g., `docs/troubleshooting.md`) are converted to version-tagged GitHub URLs
+  - PyPI users now see links pointing to the exact version they installed (e.g., `/blob/v0.1.3/docs/...`)
+- **Development repository link** - Added prominent source link for PyPI users to find the GitHub repo
+
 ## [0.1.2] - 2026-01-10
 
 ### Added
@@ -104,7 +113,8 @@ This is the initial public release of `notebooklm-py`. While core functionality 
 - **Authentication expiry**: CSRF tokens expire after some time. Re-run `notebooklm login` if you encounter auth errors.
 - **Large file uploads**: Files over 50MB may fail or timeout. Split large documents if needed.
 
-[Unreleased]: https://github.com/teng-lin/notebooklm-py/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/teng-lin/notebooklm-py/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/teng-lin/notebooklm-py/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/teng-lin/notebooklm-py/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/teng-lin/notebooklm-py/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/teng-lin/notebooklm-py/releases/tag/v0.1.0
